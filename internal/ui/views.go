@@ -269,9 +269,14 @@ func RenderDashboard(inv *models.Inventory) string {
 		PaddingBottom(1)
 	header := statsStyle.Render(fmt.Sprintf("Inventory contains %d groups and %d hosts", len(inv.Groups), len(inv.Hosts)))
 
-	// Sort groups
+	// Sort groups but keep 'all' separate
 	var gNames []string
+	hasAll := false
 	for name := range inv.Groups {
+		if name == "all" {
+			hasAll = true
+			continue
+		}
 		gNames = append(gNames, name)
 	}
 	sort.Strings(gNames)
@@ -281,47 +286,7 @@ func RenderDashboard(inv *models.Inventory) string {
 
 	for _, gName := range gNames {
 		g := inv.Groups[gName]
-		var blockSb strings.Builder
-
-		blockSb.WriteString(fmt.Sprintf("%s %s\n",
-			lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
-			BoldStyle.Foreground(Magenta).Render(strings.ToUpper(gName))))
-
-		// Hosts in group
-		sort.Strings(g.Hosts)
-		for i, hName := range g.Hosts {
-			branch := subtleStyle.Render("├─")
-			if i == len(g.Hosts)-1 && len(g.Children) == 0 {
-				branch = subtleStyle.Render("└─")
-			}
-
-			hostDisplay := BoldStyle.Foreground(Green).Render(hName)
-			if h, ok := inv.Hosts[hName]; ok && h.Vars != nil {
-				if desc, ok := h.Vars["description"].(string); ok && desc != "" {
-					hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
-				}
-			}
-
-			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
-				branch,
-				lipgloss.NewStyle().Foreground(Green).Render("🖥 "),
-				hostDisplay))
-		}
-
-		// Children groups
-		sort.Strings(g.Children)
-		for i, cName := range g.Children {
-			branch := subtleStyle.Render("├─")
-			if i == len(g.Children)-1 {
-				branch = subtleStyle.Render("└─")
-			}
-			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
-				branch,
-				lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
-				BoldStyle.Foreground(Cyan).Render(cName)))
-		}
-
-		blockStr := blockSb.String()
+		blockStr := renderGroupBlock(inv, g, subtleStyle)
 		blocks = append(blocks, blockStr)
 		w := lipgloss.Width(blockStr)
 		if w > maxBlockWidth {
@@ -343,9 +308,7 @@ func RenderDashboard(inv *models.Inventory) string {
 			end = len(blocks)
 		}
 
-		// Join blocks in this row horizontally
 		rowBlocks := blocks[i:end]
-		// Add padding between blocks
 		for j := range rowBlocks {
 			if j < len(rowBlocks)-1 {
 				rowBlocks[j] = lipgloss.NewStyle().MarginRight(4).Render(rowBlocks[j])
@@ -356,9 +319,128 @@ func RenderDashboard(inv *models.Inventory) string {
 
 	finalContent := header + "\n\n" + strings.Join(rows, "\n\n")
 
+	// Append 'all' group at the end as a special full-width block
+	if hasAll {
+		allGroup := inv.Groups["all"]
+		allBlock := renderAllGroupBlock(inv, allGroup, totalWidth-6, subtleStyle)
+		finalContent += "\n\n" + allBlock
+	}
+
 	var sb strings.Builder
 	RenderWindow(&sb, "ANSIBLE INVENTORY", strings.TrimSpace(finalContent), totalWidth)
 	return sb.String()
+}
+
+func renderGroupBlock(inv *models.Inventory, g *models.Group, subtleStyle lipgloss.Style) string {
+	var blockSb strings.Builder
+
+	blockSb.WriteString(fmt.Sprintf("%s %s\n",
+		lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
+		BoldStyle.Foreground(Magenta).Render(strings.ToUpper(g.Name))))
+
+	// Hosts in group
+	sort.Strings(g.Hosts)
+	for i, hName := range g.Hosts {
+		branch := subtleStyle.Render("├─")
+		if i == len(g.Hosts)-1 && len(g.Children) == 0 {
+			branch = subtleStyle.Render("└─")
+		}
+
+		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
+		if h, ok := inv.Hosts[hName]; ok && h.Vars != nil {
+			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
+				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
+			}
+		}
+
+		blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+			branch,
+			lipgloss.NewStyle().Foreground(Green).Render("🖥 "),
+			hostDisplay))
+	}
+
+	// Children groups
+	sort.Strings(g.Children)
+	for i, cName := range g.Children {
+		branch := subtleStyle.Render("├─")
+		if i == len(g.Children)-1 {
+			branch = subtleStyle.Render("└─")
+		}
+		blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+			branch,
+			lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
+			BoldStyle.Foreground(Cyan).Render(cName)))
+	}
+
+	return blockSb.String()
+}
+
+func renderAllGroupBlock(inv *models.Inventory, g *models.Group, width int, subtleStyle lipgloss.Style) string {
+	var blockSb strings.Builder
+
+	blockSb.WriteString(fmt.Sprintf("%s %s\n",
+		lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
+		BoldStyle.Foreground(Magenta).Render(strings.ToUpper(g.Name))))
+
+	// Children groups (usually none for 'all', but handle anyway)
+	if len(g.Children) > 0 {
+		sort.Strings(g.Children)
+		for _, cName := range g.Children {
+			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+				subtleStyle.Render("├─"),
+				lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
+				BoldStyle.Foreground(Cyan).Render(cName)))
+		}
+		blockSb.WriteString("\n")
+	}
+
+	// Multi-column Hosts
+	sort.Strings(g.Hosts)
+	var hostEntries []string
+	maxHostWidth := 0
+
+	for _, hName := range g.Hosts {
+		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
+		rawLen := len(hName) + 3 // "🖥  " + name
+		if h, ok := inv.Hosts[hName]; ok && h.Vars != nil {
+			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
+				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
+				rawLen += len(desc) + 3 // " (desc)"
+			}
+		}
+		entry := fmt.Sprintf("%s %s", lipgloss.NewStyle().Foreground(Green).Render("🖥 "), hostDisplay)
+		hostEntries = append(hostEntries, entry)
+		if rawLen > maxHostWidth {
+			maxHostWidth = rawLen
+		}
+	}
+
+	numCols := width / (maxHostWidth + 4)
+	if numCols < 1 {
+		numCols = 1
+	}
+
+	for i := 0; i < len(hostEntries); i += numCols {
+		blockSb.WriteString("  ")
+		for j := 0; j < numCols; j++ {
+			idx := i + j
+			if idx < len(hostEntries) {
+				entry := hostEntries[idx]
+				if j < numCols-1 {
+					currentLen := lipgloss.Width(entry)
+					padding := maxHostWidth + 4 - currentLen
+					if padding < 0 {
+						padding = 0
+					}
+					entry += strings.Repeat(" ", padding)
+				}
+				blockSb.WriteString(entry)
+			}
+		}
+		blockSb.WriteString("\n")
+	}
+
+	return blockSb.String()
 }
 
 // RenderGroupDashboard renders only the hierarchical tree of groups
