@@ -212,6 +212,33 @@ func AssignHostToGroup(baseDir, hostname, groupName string) error {
 	return SaveGroup(baseDir, groupName, group)
 }
 
+// AssignGroupToGroup adds a child group to a parent group
+func AssignGroupToGroup(baseDir, childName, parentName string) error {
+	inv, _ := LoadInventory(baseDir)
+	parent, ok := inv.Groups[parentName]
+	if !ok {
+		return fmt.Errorf("parent group %q not found in inventory", parentName)
+	}
+
+	if _, ok := inv.Groups[childName]; !ok {
+		return fmt.Errorf("child group %q not found in inventory", childName)
+	}
+
+	if childName == parentName {
+		return fmt.Errorf("cannot nest a group within itself")
+	}
+
+	// Check if already assigned
+	for _, c := range parent.Children {
+		if c == childName {
+			return nil
+		}
+	}
+
+	parent.Children = append(parent.Children, childName)
+	return SaveGroup(baseDir, parentName, parent)
+}
+
 // SetHostVar sets a variable for a host in host_vars/<hostname>.yml
 func SetHostVar(baseDir, hostname, key, value string) error {
 	inv, err := LoadInventory(baseDir)

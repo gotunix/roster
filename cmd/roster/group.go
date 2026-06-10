@@ -141,6 +141,30 @@ var groupAssignCmd = &cobra.Command{
 	},
 }
 
+var groupNestCmd = &cobra.Command{
+	Use:   "nest <child_group> <parent_group1,parent_group2,...>",
+	Short: "Nest a group inside one or more parent groups",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		childName := args[0]
+		parentList := args[1]
+		dir := inventoryPaths[0]
+
+		parents := strings.Split(parentList, ",")
+		for _, parentName := range parents {
+			parentName = strings.TrimSpace(parentName)
+			if parentName == "" {
+				continue
+			}
+			if err := store.AssignGroupToGroup(dir, childName, parentName); err != nil {
+				fmt.Println(ui.ErrorMsg("Nesting %s under %s: %v", childName, parentName, err))
+			} else {
+				fmt.Println(ui.SuccessMsg("Group %s nested under group %s", childName, parentName))
+			}
+		}
+	},
+}
+
 var groupRemoveCmd = &cobra.Command{
 	Use:   "remove <groupname>",
 	Short: "Remove a group from the inventory",
@@ -202,6 +226,7 @@ var groupCopyCmd = &cobra.Command{
 func init() {
 	groupCmd.AddCommand(groupAddCmd)
 	groupCmd.AddCommand(groupAssignCmd)
+	groupCmd.AddCommand(groupNestCmd)
 	groupCmd.AddCommand(groupRemoveCmd)
 	groupCmd.AddCommand(groupCopyCmd)
 	groupEditCmd.Flags().BoolVarP(&groupEditUseEditor, "editor", "e", false, "Use external $EDITOR instead of built-in form")
