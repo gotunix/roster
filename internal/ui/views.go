@@ -186,8 +186,31 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 	sort.Strings(hosts)
 
 	var listSb strings.Builder
-	for _, h := range hosts {
-		listSb.WriteString(fmt.Sprintf("• %s\n", BoldStyle.Foreground(Green).Render(h)))
+	for _, hName := range hosts {
+		h := inv.Hosts[hName]
+
+		// 1. Build Hostname + Description
+		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
+		if h != nil && h.Vars != nil {
+			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
+				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
+			}
+		}
+
+		// 2. Build Groups list
+		var groups []string
+		for gName, g := range inv.Groups {
+			for _, member := range g.Hosts {
+				if member == hName {
+					groups = append(groups, gName)
+					break
+				}
+			}
+		}
+		sort.Strings(groups)
+		groupDisplay := lipgloss.NewStyle().Foreground(Subtle).Render("[" + strings.Join(groups, ", ") + "]")
+
+		listSb.WriteString(fmt.Sprintf("• %s  %s\n", hostDisplay, groupDisplay))
 	}
 
 	var sb strings.Builder
