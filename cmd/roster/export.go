@@ -100,8 +100,6 @@ var exportCmd = &cobra.Command{
 			sort.Strings(hostNames)
 
 			for _, hName := range hostNames {
-				h := inv.Hosts[hName]
-
 				// Find groups and check for exclusion
 				var groups []string
 				excluded := false
@@ -125,16 +123,17 @@ var exportCmd = &cobra.Command{
 
 				row := []string{dir, hName, strings.Join(groups, ", ")}
 
+				// Calculate effective vars (with inheritance)
+				effectiveVars := store.GetEffectiveHostVars(inv, hName)
+
 				// Add requested vars
 				for _, vEntry := range exportVars {
 					parts := strings.SplitN(vEntry, ":", 2)
-					vName := parts[0]
+					vPath := parts[0]
 
 					val := ""
-					if h.Vars != nil {
-						if v, ok := h.Vars[vName]; ok {
-							val = fmt.Sprintf("%v", v)
-						}
+					if v := store.ResolveNestedVar(effectiveVars, vPath); v != nil {
+						val = fmt.Sprintf("%v", v)
 					}
 					row = append(row, val)
 				}

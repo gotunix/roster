@@ -32,10 +32,110 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	"gotunix.net/roster/internal/models"
 )
+
+// GetEffectiveHostVars calculates the full variable map for a host, respecting inheritance
+func GetEffectiveHostVars(inv *models.Inventory, hostname string) map[string]interface{} {
+	effective := make(map[string]interface{})
+
+	// 1. Resolve 'all' group
+	if all, ok := inv.Groups["all"]; ok {
+		for k, v := range all.Vars {
+			effective[k] = v
+		}
+	}
+
+	// 2. Find all groups and their ancestors
+	groups := findHostGroups(inv, hostname)
+
+	// To handle precedence correctly, we should merge from "least specific" to "most specific".
+	// Ansible's actual precedence is complex, but a simple depth-based or discovery-order
+	// merge is a good start. We'll use the order found by findHostGroups.
+	for _, gName := range groups {
+		if gName == "all" {
+			continue
+		}
+		if g, ok := inv.Groups[gName]; ok {
+			for k, v := range g.Vars {
+				effective[k] = v
+			}
+		}
+	}
+
+	// 3. Host-specific vars (highest precedence)
+	if h, ok := inv.Hosts[hostname]; ok {
+		for k, v := range h.Vars {
+			effective[k] = v
+		}
+	}
+
+	return effective
+}
+
+// findHostGroups returns all groups (including ancestors) a host belongs to
+func findHostGroups(inv *models.Inventory, hostname string) []string {
+	var direct []string
+	for gName, g := range inv.Groups {
+		for _, h := range g.Hosts {
+			if h == hostname {
+				direct = append(direct, gName)
+				break
+			}
+		}
+	}
+
+	// Find ancestors
+	allGroups := make(map[string]bool)
+	for _, g := range direct {
+		allGroups[g] = true
+		for _, ancestor := range findAncestors(inv, g) {
+			allGroups[ancestor] = true
+		}
+	}
+
+	var result []string
+	for g := range allGroups {
+		result = append(result, g)
+	}
+	return result
+}
+
+func findAncestors(inv *models.Inventory, childName string) []string {
+	var ancestors []string
+	for gName, g := range inv.Groups {
+		for _, child := range g.Children {
+			if child == childName {
+				ancestors = append(ancestors, gName)
+				ancestors = append(ancestors, findAncestors(inv, gName)...)
+				break
+			}
+		}
+	}
+	return ancestors
+}
+
+// ResolveNestedVar looks up a value in a map using dot notation (e.g. "networking.ip")
+func ResolveNestedVar(vars map[string]interface{}, path string) interface{} {
+	parts := strings.Split(path, ".")
+	var current interface{} = vars
+
+	for _, part := range parts {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		current, ok = m[part]
+		if !ok {
+			return nil
+		}
+	}
+	return current
+}
+
 
 // InitInventory scaffolds a standard Ansible inventory directory structure
 func InitInventory(baseDir string) error {
