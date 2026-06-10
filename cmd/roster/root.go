@@ -57,4 +57,5 @@ var inventoryPaths []string
 func init() {
 	rootCmd.SetHelpFunc(ui.HandleHelp)
 	rootCmd.SetUsageFunc(ui.HandleUsage)
+	rootCmd.PersistentFlags().StringSliceVarP(&inventoryPaths, "inventory", "i", []string{"."}, "Path to the inventory directory")
 }
