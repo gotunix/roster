@@ -57,6 +57,16 @@ var exportCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var allRows [][]string
 
+		// Clean exportVars: trim spaces and remove empty strings
+		var cleanVars []string
+		for _, v := range exportVars {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				cleanVars = append(cleanVars, v)
+			}
+		}
+		exportVars = cleanVars
+
 		// Header
 		header := []string{"Inventory", "Host", "Groups"}
 		header = append(header, exportVars...)
@@ -71,7 +81,7 @@ var exportCmd = &cobra.Command{
 		for _, dir := range inventoryPaths {
 			inv, err := store.LoadInventory(dir)
 			if err != nil {
-				fmt.Println(ui.ErrorMsg("Skipping %s: %v", dir, err))
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Skipping %s: %v", dir, err))
 				continue
 			}
 
@@ -126,22 +136,22 @@ var exportCmd = &cobra.Command{
 		var csvBuffer bytes.Buffer
 		writer := csv.NewWriter(&csvBuffer)
 		if err := writer.WriteAll(allRows); err != nil {
-			fmt.Println(ui.ErrorMsg("Writing CSV: %v", err))
+			fmt.Fprintln(os.Stderr, ui.ErrorMsg("Writing CSV: %v", err))
 			return
 		}
 
 		// Handle file output
 		if exportOutput != "" {
 			if err := os.WriteFile(exportOutput, csvBuffer.Bytes(), 0644); err != nil {
-				fmt.Println(ui.ErrorMsg("Creating output file: %v", err))
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Creating output file: %v", err))
 				return
 			}
-			fmt.Println(ui.SuccessMsg("Exported %d hosts to %s", len(allRows)-1, exportOutput))
+			fmt.Fprintln(os.Stderr, ui.SuccessMsg("Exported %d hosts to %s", len(allRows)-1, exportOutput))
 		}
 
 		// Handle email output
 		if exportEmail != "" {
-			fmt.Println(ui.BoldStyle.Foreground(ui.Cyan).Render("📧 Sending email to " + exportEmail + "..."))
+			fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("📧 Sending email to "+exportEmail+"..."))
 
 			subject := "Roster Inventory Export"
 			body := fmt.Sprintf("Please find attached the inventory export from Roster.\n\n"+
@@ -154,9 +164,9 @@ var exportCmd = &cobra.Command{
 			}
 
 			if err := email.SendCSV(exportEmail, subject, body, filename, csvBuffer.Bytes()); err != nil {
-				fmt.Println(ui.ErrorMsg("Failed to send email: %v", err))
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to send email: %v", err))
 			} else {
-				fmt.Println(ui.SuccessMsg("Email sent successfully to %s", exportEmail))
+				fmt.Fprintln(os.Stderr, ui.SuccessMsg("Email sent successfully to %s", exportEmail))
 			}
 		}
 
