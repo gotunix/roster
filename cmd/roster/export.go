@@ -69,7 +69,14 @@ var exportCmd = &cobra.Command{
 
 		// Header
 		header := []string{"Inventory", "Host", "Groups"}
-		header = append(header, exportVars...)
+		for _, v := range exportVars {
+			parts := strings.SplitN(v, ":", 2)
+			if len(parts) == 2 {
+				header = append(header, parts[1]) // Use label
+			} else {
+				header = append(header, parts[0]) // Use var name
+			}
+		}
 		allRows = append(allRows, header)
 
 		// Prepare exclusion map for fast lookup
@@ -119,7 +126,10 @@ var exportCmd = &cobra.Command{
 				row := []string{dir, hName, strings.Join(groups, ", ")}
 
 				// Add requested vars
-				for _, vName := range exportVars {
+				for _, vEntry := range exportVars {
+					parts := strings.SplitN(vEntry, ":", 2)
+					vName := parts[0]
+
 					val := ""
 					if h.Vars != nil {
 						if v, ok := h.Vars[vName]; ok {
