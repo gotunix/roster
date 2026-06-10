@@ -264,6 +264,56 @@ func RenderDashboard(inv *models.Inventory) string {
 	return sb.String()
 }
 
+// RenderGroupDashboard renders only the hierarchical tree of groups
+func RenderGroupDashboard(inv *models.Inventory) string {
+	var contentSb strings.Builder
+
+	statsStyle := lipgloss.NewStyle().
+		Foreground(Subtle).
+		Italic(true).
+		PaddingBottom(1)
+
+	contentSb.WriteString(statsStyle.Render(fmt.Sprintf("Inventory contains %d groups", len(inv.Groups))) + "\n")
+
+	// Sort groups
+	var groups []string
+	for gName := range inv.Groups {
+		groups = append(groups, gName)
+	}
+	sort.Strings(groups)
+
+	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
+
+	for _, gName := range groups {
+		g := inv.Groups[gName]
+		contentSb.WriteString(fmt.Sprintf("%s %s\n",
+			lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
+			BoldStyle.Foreground(Magenta).Render(strings.ToUpper(gName))))
+
+		// Children groups
+		sort.Strings(g.Children)
+		for i, cName := range g.Children {
+			branch := subtleStyle.Render("├─")
+			if i == len(g.Children)-1 {
+				branch = subtleStyle.Render("└─")
+			}
+			contentSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+				branch,
+				lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
+				BoldStyle.Foreground(Cyan).Render(cName)))
+		}
+		if len(g.Children) > 0 {
+			contentSb.WriteString("\n")
+		} else if len(groups) > 1 {
+			contentSb.WriteString("\n")
+		}
+	}
+
+	var sb strings.Builder
+	RenderWindow(&sb, "GROUP HIERARCHY", strings.TrimSpace(contentSb.String()), GetTerminalWidth())
+	return sb.String()
+}
+
 // RenderGroupList renders a sorted list of all groups in the inventory
 func RenderGroupList(inv *models.Inventory) string {
 	if len(inv.Groups) == 0 {
