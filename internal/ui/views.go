@@ -185,19 +185,23 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 
 	sort.Strings(hosts)
 
-	var listSb strings.Builder
-	for _, hName := range hosts {
+	// Calculate max width needed for a single host entry
+	maxHostWidth := 0
+	entries := make([]string, len(hosts))
+	for i, hName := range hosts {
 		h := inv.Hosts[hName]
 
-		// 1. Build Hostname + Description
+		// Build Hostname + Description
 		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
+		rawLen := len(hName) + 2 // "• " + name
 		if h != nil && h.Vars != nil {
 			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
 				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
+				rawLen += len(desc) + 3 // " (desc)"
 			}
 		}
 
-		// 2. Build Groups list
+		// Build Groups list
 		var groups []string
 		for gName, g := range inv.Groups {
 			for _, member := range g.Hosts {
@@ -208,13 +212,48 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 			}
 		}
 		sort.Strings(groups)
-		groupDisplay := lipgloss.NewStyle().Foreground(Subtle).Render("[" + strings.Join(groups, ", ") + "]")
+		gStr := "[" + strings.Join(groups, ", ") + "]"
+		groupDisplay := lipgloss.NewStyle().Foreground(Subtle).Render(gStr)
+		rawLen += len(gStr) + 2 // "  " + groups
 
-		listSb.WriteString(fmt.Sprintf("• %s  %s\n", hostDisplay, groupDisplay))
+		entries[i] = fmt.Sprintf("• %s  %s", hostDisplay, groupDisplay)
+		if rawLen > maxHostWidth {
+			maxHostWidth = rawLen
+		}
+	}
+
+	// Calculate how many columns we can fit
+	totalWidth := GetTerminalWidth()
+	contentWidth := totalWidth - 6 // Padding and borders
+	numCols := contentWidth / (maxHostWidth + 4)
+	if numCols < 1 {
+		numCols = 1
+	}
+
+	var listSb strings.Builder
+	for i := 0; i < len(entries); i += numCols {
+		for j := 0; j < numCols; j++ {
+			idx := i + j
+			if idx < len(entries) {
+				// Pad entry to align columns
+				item := entries[idx]
+				if j < numCols-1 {
+					// We need to pad the rendered string. Lipgloss.Width gives us the visual width.
+					currentLen := lipgloss.Width(item)
+					padding := maxHostWidth + 4 - currentLen
+					if padding < 0 {
+						padding = 0
+					}
+					item += strings.Repeat(" ", padding)
+				}
+				listSb.WriteString(item)
+			}
+		}
+		listSb.WriteString("\n")
 	}
 
 	var sb strings.Builder
-	RenderWindow(&sb, title, strings.TrimSpace(listSb.String()), GetTerminalWidth())
+	RenderWindow(&sb, title, strings.TrimSpace(listSb.String()), totalWidth)
 	return sb.String()
 }
 
