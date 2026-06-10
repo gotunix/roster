@@ -123,6 +123,8 @@ var hostRemoveCmd = &cobra.Command{
 	},
 }
 
+var hostEditUseEditor bool
+
 var hostEditCmd = &cobra.Command{
 	Use:   "edit <hostname>",
 	Short: "Edit host details and variables",
@@ -131,7 +133,14 @@ var hostEditCmd = &cobra.Command{
 		hostname := args[0]
 		dir := inventoryPaths[0]
 
-		if err := interactive.EditHostInteractive(dir, hostname); err != nil {
+		var err error
+		if hostEditUseEditor {
+			err = interactive.EditHostExternal(dir, hostname)
+		} else {
+			err = interactive.EditHostInteractive(dir, hostname)
+		}
+
+		if err != nil {
 			fmt.Println(ui.ErrorMsg("%v", err))
 		} else {
 			fmt.Println(ui.SuccessMsg("Host %s updated", hostname))
@@ -159,6 +168,7 @@ var hostMoveCmd = &cobra.Command{
 func init() {
 	hostCmd.AddCommand(hostAddCmd)
 	hostCmd.AddCommand(hostRemoveCmd)
+	hostEditCmd.Flags().BoolVarP(&hostEditUseEditor, "editor", "e", false, "Use external $EDITOR instead of built-in form")
 	hostCmd.AddCommand(hostEditCmd)
 	hostCmd.AddCommand(hostMoveCmd)
 	hostCmd.AddCommand(hostListCmd)

@@ -157,6 +157,8 @@ var groupRemoveCmd = &cobra.Command{
 	},
 }
 
+var groupEditUseEditor bool
+
 var groupEditCmd = &cobra.Command{
 	Use:   "edit <groupname>",
 	Short: "Edit group details and variables",
@@ -165,7 +167,14 @@ var groupEditCmd = &cobra.Command{
 		groupname := args[0]
 		dir := inventoryPaths[0]
 
-		if err := interactive.EditGroupInteractive(dir, groupname); err != nil {
+		var err error
+		if groupEditUseEditor {
+			err = interactive.EditGroupExternal(dir, groupname)
+		} else {
+			err = interactive.EditGroupInteractive(dir, groupname)
+		}
+
+		if err != nil {
 			fmt.Println(ui.ErrorMsg("%v", err))
 		} else {
 			fmt.Println(ui.SuccessMsg("Group %s updated", groupname))
@@ -195,6 +204,7 @@ func init() {
 	groupCmd.AddCommand(groupAssignCmd)
 	groupCmd.AddCommand(groupRemoveCmd)
 	groupCmd.AddCommand(groupCopyCmd)
+	groupEditCmd.Flags().BoolVarP(&groupEditUseEditor, "editor", "e", false, "Use external $EDITOR instead of built-in form")
 	groupCmd.AddCommand(groupEditCmd)
 	groupCmd.AddCommand(groupListCmd)
 	groupCmd.AddCommand(groupViewCmd)

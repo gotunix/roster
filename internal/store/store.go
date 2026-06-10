@@ -65,6 +65,37 @@ func InitInventory(baseDir string) error {
 	return nil
 }
 
+// GetHostVarsPath returns the existing path to a host's vars file, or a default one
+func GetHostVarsPath(baseDir, hostname string) string {
+	paths := []string{
+		filepath.Join(baseDir, "host_vars", hostname+".yaml"),
+		filepath.Join(baseDir, "host_vars", hostname+".yml"),
+		filepath.Join(baseDir, "host_vars", hostname),
+	}
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return filepath.Join(baseDir, "host_vars", hostname+".yml")
+}
+
+// GetGroupVarsPath returns the existing path to a group's vars file, or a default one
+func GetGroupVarsPath(baseDir, groupname string) string {
+	paths := []string{
+		filepath.Join(baseDir, "group_vars", groupname+".yaml"),
+		filepath.Join(baseDir, "group_vars", groupname+".yml"),
+	}
+
+	for _, p := range paths {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return filepath.Join(baseDir, "group_vars", groupname+".yml")
+}
+
 // GetHostVars reads variables for a specific host from host_vars/<hostname>.yml
 func GetHostVars(baseDir, hostname string) (map[string]interface{}, error) {
 	paths := []string{

@@ -30,6 +30,8 @@ package interactive
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -39,6 +41,50 @@ import (
 	"gotunix.net/roster/internal/store"
 	"gotunix.net/roster/internal/ui"
 )
+
+func EditHostExternal(baseDir, hostname string) error {
+	path := store.GetHostVarsPath(baseDir, hostname)
+	// Ensure file exists if we are going to edit it
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.WriteFile(path, []byte("{}"), 0644); err != nil {
+			return fmt.Errorf("failed to create host_vars file: %v", err)
+		}
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi" // Fallback
+	}
+
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func EditGroupExternal(baseDir, groupname string) error {
+	path := store.GetGroupVarsPath(baseDir, groupname)
+	// Ensure file exists if we are going to edit it
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := os.WriteFile(path, []byte("{}"), 0644); err != nil {
+			return fmt.Errorf("failed to create group_vars file: %v", err)
+		}
+	}
+
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi" // Fallback
+	}
+
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
 
 func getCustomKeyMap() *huh.KeyMap {
 	km := huh.NewDefaultKeyMap()
