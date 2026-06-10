@@ -106,7 +106,7 @@ func RenderVersion() error {
 	dLeft := (totalWidth - 2 - len(titleText)) / 2
 	dRight := totalWidth - 2 - len(titleText) - dLeft
 	sb.WriteString("\n" + subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dLeft)) +
-		BoldStyle.Foreground(lipgloss.Color("#FFFFFF")).Render(titleText) +
+		TitleStyle.Render("SYSTEM INFORMATION") +
 		subStyle.Render(strings.Repeat(border.Top, dRight)+border.TopRight) + "\n")
 
 	// Row Calculations
@@ -304,7 +304,7 @@ func RenderGroupView(groupname string, dir string, inv *models.Inventory) (strin
 	subStyle := lipgloss.NewStyle().Foreground(Subtle)
 
 	sb.WriteString("\n" + subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dLeft)) +
-		BoldStyle.Foreground(lipgloss.Color("#FFFFFF")).Render(titleText) +
+		TitleStyle.Render(fmt.Sprintf("GROUP: %s", groupname)) +
 		subStyle.Render(strings.Repeat(border.Top, dRight)+border.TopRight) + "\n")
 
 	// Members Row
@@ -356,7 +356,7 @@ func RenderHostView(hostname string, dir string, inv *models.Inventory) (string,
 	subStyle := lipgloss.NewStyle().Foreground(Subtle)
 
 	sb.WriteString("\n" + subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dLeft)) +
-		BoldStyle.Foreground(lipgloss.Color("#FFFFFF")).Render(titleText) +
+		TitleStyle.Render(fmt.Sprintf("HOST: %s", hostname)) +
 		subStyle.Render(strings.Repeat(border.Top, dRight)+border.TopRight) + "\n")
 
 	// Groups Row
@@ -411,19 +411,13 @@ func RenderWindow(sb *strings.Builder, title, content string, width int) {
 
 	border := lipgloss.RoundedBorder()
 	subStyle := lipgloss.NewStyle().Foreground(Subtle)
-	titleStyle := lipgloss.NewStyle().
-		Background(Magenta).
-		Foreground(lipgloss.Color("#FFFFFF")).
-		Bold(true).
-		Padding(0, 1)
-
 	// 1. Top Border with Integrated Header
 	tText := fmt.Sprintf(" %s ", title)
 	dL := (width - 2 - len(tText)) / 2
 	dR := width - 2 - len(tText) - dL
 
 	sb.WriteString(subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dL)) +
-		titleStyle.Render(title) +
+		TitleStyle.Render(title) +
 		subStyle.Render(strings.Repeat(border.Top, dR)+border.TopRight) + "\n")
 
 	// 2. Content with Lipgloss managed width and padding

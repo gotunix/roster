@@ -65,12 +65,9 @@ var (
 
 	BoldStyle  = lipgloss.NewStyle().Bold(true)
 	TitleStyle = lipgloss.NewStyle().
-			MarginLeft(1).
-			MarginRight(5).
 			Padding(0, 1).
-			Italic(true).
-			Foreground(lipgloss.Color("#FFF7DB")).
-			Background(lipgloss.Color("#F25D94")).
+			Foreground(lipgloss.Color("#000000")).
+			Background(lipgloss.Color("#FFFFFF")).
 			Bold(true)
 
 	HeaderStyle = lipgloss.NewStyle().
@@ -112,7 +109,7 @@ var (
 	DescriptionStyle = lipgloss.NewStyle().Foreground(Gray)
 
 	LogoStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
-	HelpTitleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#FAFAFA")).Background(lipgloss.Color("#7D56F4")).Padding(0, 1).Bold(true).MarginBottom(1)
+	HelpTitleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#000000")).Background(lipgloss.Color("#FFFFFF")).Padding(0, 1).Bold(true).MarginBottom(1)
 	HelpDescStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#AFB1B6")).Italic(true).MarginBottom(1)
 	HelpSectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true).MarginTop(1)
 	HelpFlagStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#AFB1B6"))
