@@ -539,9 +539,19 @@ func RenderGroupList(inv *models.Inventory) string {
 	maxGWidth := 0
 	entries := make([]string, len(gNames))
 	for i, name := range gNames {
+		g := inv.Groups[name]
 		display := BoldStyle.Foreground(Magenta).Render(name)
-		entries[i] = "• " + display
 		rawLen := len(name) + 2
+
+		// Add nesting info if children exist
+		if len(g.Children) > 0 {
+			sort.Strings(g.Children)
+			cStr := " (→ " + strings.Join(g.Children, ", ") + ")"
+			display += DescriptionStyle.Render(cStr)
+			rawLen += len(cStr)
+		}
+
+		entries[i] = "• " + display
 		if rawLen > maxGWidth {
 			maxGWidth = rawLen
 		}
