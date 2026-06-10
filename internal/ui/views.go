@@ -259,29 +259,31 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 
 // RenderDashboard renders a hierarchical tree view of the inventory
 func RenderDashboard(inv *models.Inventory) string {
-	// Content Area
-	var contentSb strings.Builder
+	totalWidth := GetTerminalWidth()
+	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
 
 	// Summary Header
 	statsStyle := lipgloss.NewStyle().
 		Foreground(Subtle).
 		Italic(true).
 		PaddingBottom(1)
-
-	contentSb.WriteString(statsStyle.Render(fmt.Sprintf("Inventory contains %d groups and %d hosts", len(inv.Groups), len(inv.Hosts))) + "\n")
+	header := statsStyle.Render(fmt.Sprintf("Inventory contains %d groups and %d hosts", len(inv.Groups), len(inv.Hosts)))
 
 	// Sort groups
-	var groups []string
-	for gName := range inv.Groups {
-		groups = append(groups, gName)
+	var gNames []string
+	for name := range inv.Groups {
+		gNames = append(gNames, name)
 	}
-	sort.Strings(groups)
+	sort.Strings(gNames)
 
-	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
+	var blocks []string
+	maxBlockWidth := 0
 
-	for _, gName := range groups {
+	for _, gName := range gNames {
 		g := inv.Groups[gName]
-		contentSb.WriteString(fmt.Sprintf("%s %s\n",
+		var blockSb strings.Builder
+
+		blockSb.WriteString(fmt.Sprintf("%s %s\n",
 			lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
 			BoldStyle.Foreground(Magenta).Render(strings.ToUpper(gName))))
 
@@ -300,7 +302,7 @@ func RenderDashboard(inv *models.Inventory) string {
 				}
 			}
 
-			contentSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
 				branch,
 				lipgloss.NewStyle().Foreground(Green).Render("🖥 "),
 				hostDisplay))
@@ -313,42 +315,78 @@ func RenderDashboard(inv *models.Inventory) string {
 			if i == len(g.Children)-1 {
 				branch = subtleStyle.Render("└─")
 			}
-			contentSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
 				branch,
 				lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
 				BoldStyle.Foreground(Cyan).Render(cName)))
 		}
-		contentSb.WriteString("\n")
+
+		blockStr := blockSb.String()
+		blocks = append(blocks, blockStr)
+		w := lipgloss.Width(blockStr)
+		if w > maxBlockWidth {
+			maxBlockWidth = w
+		}
 	}
 
+	// Arrange blocks into rows
+	contentWidth := totalWidth - 6
+	numCols := contentWidth / (maxBlockWidth + 4)
+	if numCols < 1 {
+		numCols = 1
+	}
+
+	var rows []string
+	for i := 0; i < len(blocks); i += numCols {
+		end := i + numCols
+		if end > len(blocks) {
+			end = len(blocks)
+		}
+
+		// Join blocks in this row horizontally
+		rowBlocks := blocks[i:end]
+		// Add padding between blocks
+		for j := range rowBlocks {
+			if j < len(rowBlocks)-1 {
+				rowBlocks[j] = lipgloss.NewStyle().MarginRight(4).Render(rowBlocks[j])
+			}
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, rowBlocks...))
+	}
+
+	finalContent := header + "\n\n" + strings.Join(rows, "\n\n")
+
 	var sb strings.Builder
-	RenderWindow(&sb, "ANSIBLE INVENTORY", strings.TrimSpace(contentSb.String()), GetTerminalWidth())
+	RenderWindow(&sb, "ANSIBLE INVENTORY", strings.TrimSpace(finalContent), totalWidth)
 	return sb.String()
 }
 
 // RenderGroupDashboard renders only the hierarchical tree of groups
 func RenderGroupDashboard(inv *models.Inventory) string {
-	var contentSb strings.Builder
+	totalWidth := GetTerminalWidth()
+	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
 
 	statsStyle := lipgloss.NewStyle().
 		Foreground(Subtle).
 		Italic(true).
 		PaddingBottom(1)
-
-	contentSb.WriteString(statsStyle.Render(fmt.Sprintf("Inventory contains %d groups", len(inv.Groups))) + "\n")
+	header := statsStyle.Render(fmt.Sprintf("Inventory contains %d groups", len(inv.Groups)))
 
 	// Sort groups
-	var groups []string
-	for gName := range inv.Groups {
-		groups = append(groups, gName)
+	var gNames []string
+	for name := range inv.Groups {
+		gNames = append(gNames, name)
 	}
-	sort.Strings(groups)
+	sort.Strings(gNames)
 
-	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
+	var blocks []string
+	maxBlockWidth := 0
 
-	for _, gName := range groups {
+	for _, gName := range gNames {
 		g := inv.Groups[gName]
-		contentSb.WriteString(fmt.Sprintf("%s %s\n",
+		var blockSb strings.Builder
+
+		blockSb.WriteString(fmt.Sprintf("%s %s\n",
 			lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
 			BoldStyle.Foreground(Magenta).Render(strings.ToUpper(gName))))
 
@@ -359,20 +397,47 @@ func RenderGroupDashboard(inv *models.Inventory) string {
 			if i == len(g.Children)-1 {
 				branch = subtleStyle.Render("└─")
 			}
-			contentSb.WriteString(fmt.Sprintf("  %s %s %s\n",
+			blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
 				branch,
 				lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
 				BoldStyle.Foreground(Cyan).Render(cName)))
 		}
-		if len(g.Children) > 0 {
-			contentSb.WriteString("\n")
-		} else if len(groups) > 1 {
-			contentSb.WriteString("\n")
+
+		blockStr := blockSb.String()
+		blocks = append(blocks, blockStr)
+		w := lipgloss.Width(blockStr)
+		if w > maxBlockWidth {
+			maxBlockWidth = w
 		}
 	}
 
+	// Arrange blocks into rows
+	contentWidth := totalWidth - 6
+	numCols := contentWidth / (maxBlockWidth + 4)
+	if numCols < 1 {
+		numCols = 1
+	}
+
+	var rows []string
+	for i := 0; i < len(blocks); i += numCols {
+		end := i + numCols
+		if end > len(blocks) {
+			end = len(blocks)
+		}
+
+		rowBlocks := blocks[i:end]
+		for j := range rowBlocks {
+			if j < len(rowBlocks)-1 {
+				rowBlocks[j] = lipgloss.NewStyle().MarginRight(4).Render(rowBlocks[j])
+			}
+		}
+		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, rowBlocks...))
+	}
+
+	finalContent := header + "\n\n" + strings.Join(rows, "\n\n")
+
 	var sb strings.Builder
-	RenderWindow(&sb, "GROUP HIERARCHY", strings.TrimSpace(contentSb.String()), GetTerminalWidth())
+	RenderWindow(&sb, "GROUP HIERARCHY", strings.TrimSpace(finalContent), totalWidth)
 	return sb.String()
 }
 
