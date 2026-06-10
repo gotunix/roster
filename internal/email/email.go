@@ -33,19 +33,39 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"strings"
 )
 
 // SendCSV sends an email with a CSV attachment using SMTP settings from environment variables
 func SendCSV(to, subject, body, filename string, csvData []byte) error {
-	host := os.Getenv("ROSTER_SMTP_HOST")
-	port := os.Getenv("ROSTER_SMTP_PORT")
-	user := os.Getenv("ROSTER_SMTP_USER")
-	pass := os.Getenv("ROSTER_SMTP_PASS")
-	from := os.Getenv("ROSTER_SMTP_FROM")
-
-	if host == "" || port == "" || user == "" || pass == "" || from == "" {
-		return fmt.Errorf("missing SMTP environment variables (ROSTER_SMTP_HOST, ROSTER_SMTP_PORT, ROSTER_SMTP_USER, ROSTER_SMTP_PASS, ROSTER_SMTP_FROM)")
+	required := []string{
+		"ROSTER_SMTP_HOST",
+		"ROSTER_SMTP_PORT",
+		"ROSTER_SMTP_USER",
+		"ROSTER_SMTP_PASS",
+		"ROSTER_SMTP_FROM",
 	}
+
+	var missing []string
+	vars := make(map[string]string)
+
+	for _, k := range required {
+		v := os.Getenv(k)
+		if v == "" {
+			missing = append(missing, k)
+		}
+		vars[k] = v
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing SMTP environment variables: %s", strings.Join(missing, ", "))
+	}
+
+	host := vars["ROSTER_SMTP_HOST"]
+	port := vars["ROSTER_SMTP_PORT"]
+	user := vars["ROSTER_SMTP_USER"]
+	pass := vars["ROSTER_SMTP_PASS"]
+	from := vars["ROSTER_SMTP_FROM"]
 
 	boundary := "ROSTER_CSV_EXPORT_BOUNDARY"
 
