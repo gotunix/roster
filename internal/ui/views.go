@@ -447,19 +447,53 @@ func RenderGroupList(inv *models.Inventory) string {
 		return "  " + DescriptionStyle.Render("No groups found.")
 	}
 
-	var groups []string
+	var gNames []string
 	for name := range inv.Groups {
-		groups = append(groups, name)
+		gNames = append(gNames, name)
 	}
-	sort.Strings(groups)
+	sort.Strings(gNames)
+
+	// Calculate max width for a group entry
+	maxGWidth := 0
+	entries := make([]string, len(gNames))
+	for i, name := range gNames {
+		display := BoldStyle.Foreground(Magenta).Render(name)
+		entries[i] = "• " + display
+		rawLen := len(name) + 2
+		if rawLen > maxGWidth {
+			maxGWidth = rawLen
+		}
+	}
+
+	totalWidth := GetTerminalWidth()
+	contentWidth := totalWidth - 6
+	numCols := contentWidth / (maxGWidth + 4)
+	if numCols < 1 {
+		numCols = 1
+	}
 
 	var listSb strings.Builder
-	for _, g := range groups {
-		listSb.WriteString(fmt.Sprintf("• %s\n", BoldStyle.Foreground(Magenta).Render(g)))
+	for i := 0; i < len(entries); i += numCols {
+		for j := 0; j < numCols; j++ {
+			idx := i + j
+			if idx < len(entries) {
+				item := entries[idx]
+				if j < numCols-1 {
+					currentLen := lipgloss.Width(item)
+					padding := maxGWidth + 4 - currentLen
+					if padding < 0 {
+						padding = 0
+					}
+					item += strings.Repeat(" ", padding)
+				}
+				listSb.WriteString(item)
+			}
+		}
+		listSb.WriteString("\n")
 	}
 
 	var sb strings.Builder
-	RenderWindow(&sb, "GROUPS", strings.TrimSpace(listSb.String()), GetTerminalWidth())
+	RenderWindow(&sb, "GROUPS", strings.TrimSpace(listSb.String()), totalWidth)
 	return sb.String()
 }
 
