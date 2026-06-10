@@ -41,8 +41,6 @@ func SendCSV(to, subject, body, filename string, csvData []byte) error {
 	required := []string{
 		"ROSTER_SMTP_HOST",
 		"ROSTER_SMTP_PORT",
-		"ROSTER_SMTP_USER",
-		"ROSTER_SMTP_PASS",
 		"ROSTER_SMTP_FROM",
 	}
 
@@ -63,9 +61,10 @@ func SendCSV(to, subject, body, filename string, csvData []byte) error {
 
 	host := vars["ROSTER_SMTP_HOST"]
 	port := vars["ROSTER_SMTP_PORT"]
-	user := vars["ROSTER_SMTP_USER"]
-	pass := vars["ROSTER_SMTP_PASS"]
 	from := vars["ROSTER_SMTP_FROM"]
+
+	user := os.Getenv("ROSTER_SMTP_USER")
+	pass := os.Getenv("ROSTER_SMTP_PASS")
 
 	boundary := "ROSTER_CSV_EXPORT_BOUNDARY"
 
@@ -104,7 +103,11 @@ func SendCSV(to, subject, body, filename string, csvData []byte) error {
 
 	fullMessage := header + bodyPart + attachmentPart + chunkedData + "\r\n" + footer
 
-	auth := smtp.PlainAuth("", user, pass, host)
+	var auth smtp.Auth
+	if user != "" || pass != "" {
+		auth = smtp.PlainAuth("", user, pass, host)
+	}
+
 	err := smtp.SendMail(host+":"+port, auth, from, []string{to}, []byte(fullMessage))
 	return err
 }
