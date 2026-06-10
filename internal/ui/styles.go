@@ -42,12 +42,9 @@ func GetTerminalWidth() int {
 	if err != nil || w <= 0 {
 		return 100 // Fallback
 	}
-	// Clamp between 80 and 150 for best readability
+	// Ensure a minimum width for readability
 	if w < 80 {
 		return 80
-	}
-	if w > 150 {
-		return 150
 	}
 	return w
 }
