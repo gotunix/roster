@@ -570,44 +570,102 @@ func RenderGroupView(groupname string, dir string, inv *models.Inventory) (strin
 	totalWidth := GetTerminalWidth()
 	var sb strings.Builder
 
-	// Header
-	titleText := fmt.Sprintf(" GROUP: %s ", groupname)
-	dLeft := (totalWidth - 2 - len(titleText)) / 2
-	dRight := totalWidth - 2 - len(titleText) - dLeft
-	border := lipgloss.RoundedBorder()
-	subStyle := lipgloss.NewStyle().Foreground(Subtle)
+	// --- 1. Info Window (Hosts & Children) ---
+	var infoSb strings.Builder
 
-	sb.WriteString("\n" + subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dLeft)) +
-		TitleStyle.Render(fmt.Sprintf("GROUP: %s", groupname)) +
-		subStyle.Render(strings.Repeat(border.Top, dRight)+border.TopRight) + "\n")
+	// Hosts Grid
+	if len(group.Hosts) > 0 {
+		infoSb.WriteString(BoldStyle.Render("HOSTS:") + "\n")
+		sort.Strings(group.Hosts)
 
-	// Members Row
-	labelStyle := LabelStyle.Padding(0, 1).Width(14)
-	valStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1)
-	fullValW := totalWidth - 17
+		maxHWidth := 0
+		hEntries := make([]string, len(group.Hosts))
+		for i, hName := range group.Hosts {
+			h := inv.Hosts[hName]
+			display := BoldStyle.Foreground(Green).Render(hName)
+			rawLen := len(hName) + 4 // "  • "
+			if h != nil && h.Vars != nil {
+				if desc, ok := h.Vars["description"].(string); ok && desc != "" {
+					display = fmt.Sprintf("%s %s", display, DescriptionStyle.Render("("+desc+")"))
+					rawLen += len(desc) + 3
+				}
+			}
+			hEntries[i] = "  • " + display
+			if rawLen > maxHWidth {
+				maxHWidth = rawLen
+			}
+		}
 
-	members := strings.Join(group.Hosts, ", ")
-	if members == "" {
-		members = "(none)"
+		numCols := (totalWidth - 10) / (maxHWidth + 4)
+		if numCols < 1 {
+			numCols = 1
+		}
+
+		for i := 0; i < len(hEntries); i += numCols {
+			for j := 0; j < numCols; j++ {
+				idx := i + j
+				if idx < len(hEntries) {
+					item := hEntries[idx]
+					if j < numCols-1 {
+						padding := maxHWidth + 4 - lipgloss.Width(item)
+						if padding > 0 {
+							item += strings.Repeat(" ", padding)
+						}
+					}
+					infoSb.WriteString(item)
+				}
+			}
+			infoSb.WriteString("\n")
+		}
+	} else {
+		infoSb.WriteString(BoldStyle.Render("HOSTS:") + " " + DescriptionStyle.Render("(none)") + "\n")
 	}
 
-	sb.WriteString(subStyle.Render("│") + labelStyle.Render("HOSTS:") + subStyle.Render("│") +
-		valStyle.Width(fullValW).Render(members) + subStyle.Render("│") + "\n")
-
+	// Children Grid
 	if len(group.Children) > 0 {
-		sb.WriteString(subStyle.Render("├──────────────┼"+strings.Repeat("─", fullValW)+"┤") + "\n")
-		sb.WriteString(subStyle.Render("│") + labelStyle.Render("CHILDREN:") + subStyle.Render("│") +
-			valStyle.Width(fullValW).Render(strings.Join(group.Children, ", ")) + subStyle.Render("│") + "\n")
+		infoSb.WriteString("\n" + BoldStyle.Render("CHILDREN GROUPS:") + "\n")
+		sort.Strings(group.Children)
+
+		maxCWidth := 0
+		cEntries := make([]string, len(group.Children))
+		for i, cName := range group.Children {
+			cEntries[i] = "  • " + BoldStyle.Foreground(Cyan).Render(cName)
+			if len(cName)+4 > maxCWidth {
+				maxCWidth = len(cName) + 4
+			}
+		}
+
+		numCols := (totalWidth - 10) / (maxCWidth + 4)
+		if numCols < 1 {
+			numCols = 1
+		}
+
+		for i := 0; i < len(cEntries); i += numCols {
+			for j := 0; j < numCols; j++ {
+				idx := i + j
+				if idx < len(cEntries) {
+					item := cEntries[idx]
+					if j < numCols-1 {
+						padding := maxCWidth + 4 - lipgloss.Width(item)
+						if padding > 0 {
+							item += strings.Repeat(" ", padding)
+						}
+					}
+					infoSb.WriteString(item)
+				}
+			}
+			infoSb.WriteString("\n")
+		}
 	}
 
-	sb.WriteString(subStyle.Render(border.BottomLeft+strings.Repeat(border.Bottom, totalWidth-2)+border.BottomRight) + "\n")
+	RenderWindow(&sb, fmt.Sprintf("GROUP: %s", strings.ToUpper(groupname)), strings.TrimSpace(infoSb.String()), totalWidth)
 
-	// --- Variable Boxes ---
-	// 1. Direct Group Vars
+	// --- 2. Variable Windows ---
+	// Direct Group Vars
 	gvStr := FormatVars(group.Vars)
 	RenderWindow(&sb, "DIRECT GROUP VARS", gvStr, totalWidth)
 
-	// 2. Inherited from 'all'
+	// Inherited from 'all'
 	if groupname != "all" {
 		av, _ := store.GetGroupVars(dir, "all")
 		avStr := FormatVars(av)
@@ -622,18 +680,10 @@ func RenderHostView(hostname string, dir string, inv *models.Inventory) (string,
 	totalWidth := GetTerminalWidth()
 	var sb strings.Builder
 
-	// Header
-	titleText := fmt.Sprintf(" HOST: %s ", hostname)
-	dLeft := (totalWidth - 2 - len(titleText)) / 2
-	dRight := totalWidth - 2 - len(titleText) - dLeft
-	border := lipgloss.RoundedBorder()
-	subStyle := lipgloss.NewStyle().Foreground(Subtle)
+	// --- 1. Info Window (Groups) ---
+	var infoSb strings.Builder
+	infoSb.WriteString(BoldStyle.Render("GROUPS:") + "\n")
 
-	sb.WriteString("\n" + subStyle.Render(border.TopLeft+strings.Repeat(border.Top, dLeft)) +
-		TitleStyle.Render(fmt.Sprintf("HOST: %s", hostname)) +
-		subStyle.Render(strings.Repeat(border.Top, dRight)+border.TopRight) + "\n")
-
-	// Groups Row
 	var groups []string
 	for gName, g := range inv.Groups {
 		for _, hName := range g.Hosts {
@@ -643,16 +693,46 @@ func RenderHostView(hostname string, dir string, inv *models.Inventory) (string,
 			}
 		}
 	}
+	sort.Strings(groups)
 
-	labelStyle := LabelStyle.Padding(0, 1).Width(14)
-	valStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Padding(0, 1)
-	fullValW := totalWidth - 17
+	if len(groups) > 0 {
+		maxGWidth := 0
+		gEntries := make([]string, len(groups))
+		for i, gName := range groups {
+			gEntries[i] = "  • " + BoldStyle.Foreground(Magenta).Render(gName)
+			if len(gName)+4 > maxGWidth {
+				maxGWidth = len(gName) + 4
+			}
+		}
 
-	sb.WriteString(subStyle.Render("│") + labelStyle.Render("GROUPS:") + subStyle.Render("│") +
-		valStyle.Width(fullValW).Render(strings.Join(groups, ", ")) + subStyle.Render("│") + "\n")
-	sb.WriteString(subStyle.Render(border.BottomLeft+strings.Repeat(border.Bottom, totalWidth-2)+border.BottomRight) + "\n")
+		numCols := (totalWidth - 10) / (maxGWidth + 4)
+		if numCols < 1 {
+			numCols = 1
+		}
 
-	// --- Variable Boxes ---
+		for i := 0; i < len(gEntries); i += numCols {
+			for j := 0; j < numCols; j++ {
+				idx := i + j
+				if idx < len(gEntries) {
+					item := gEntries[idx]
+					if j < numCols-1 {
+						padding := maxGWidth + 4 - lipgloss.Width(item)
+						if padding > 0 {
+							item += strings.Repeat(" ", padding)
+						}
+					}
+					infoSb.WriteString(item)
+				}
+			}
+			infoSb.WriteString("\n")
+		}
+	} else {
+		infoSb.WriteString("  " + DescriptionStyle.Render("(none)") + "\n")
+	}
+
+	RenderWindow(&sb, fmt.Sprintf("HOST: %s", strings.ToUpper(hostname)), strings.TrimSpace(infoSb.String()), totalWidth)
+
+	// --- 2. Variable Windows ---
 	// 1. Direct host_vars
 	hv, _ := store.GetHostVars(dir, hostname)
 	hvStr := FormatVars(hv)
