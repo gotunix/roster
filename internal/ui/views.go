@@ -228,7 +228,7 @@ func RenderHostList(inv *models.Inventory, groupFilter string, showGroups bool) 
 			}
 		}
 
-		blockStr := bSb.String()
+		blockStr := strings.TrimSpace(bSb.String())
 		hostBlocks = append(hostBlocks, blockStr)
 		if rawWidth > maxBlockWidth {
 			maxBlockWidth = rawWidth
@@ -267,6 +267,9 @@ func RenderHostList(inv *models.Inventory, groupFilter string, showGroups bool) 
 			rowBlocks[j] = lipgloss.NewStyle().Width(maxBlockWidth + 4).Render(hostBlocks[i+j])
 		}
 		listSb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, rowBlocks...) + "\n")
+		if showGroups {
+			listSb.WriteString("\n")
+		}
 	}
 
 	var sb strings.Builder
