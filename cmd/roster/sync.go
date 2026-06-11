@@ -78,8 +78,62 @@ var syncNetboxCmd = &cobra.Command{
 		}
 		defer store.UnlockInventory()
 
-		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🔄 Syncing from NetBox: "+baseURL))
+		// 1. Sync Config Contexts (Groups)
+		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("📦 Syncing Group Config Contexts..."))
+		contextURL, _ := url.Parse(baseURL)
+		contextURL.Path = strings.TrimSuffix(contextURL.Path, "/") + "/api/extras/config-contexts/"
+		
+		cURL := contextURL.String()
+		for cURL != "" {
+			client := &http.Client{Timeout: 30 * time.Second}
+			req, _ := http.NewRequest("GET", cURL, nil)
+			req.Header.Add("Authorization", "Token "+token)
+			req.Header.Add("Accept", "application/json")
 
+			resp, err := client.Do(req)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Context request failed: %v", err))
+				break
+			}
+
+			var ctxResp struct {
+				Next    *string `json:"next"`
+				Results []struct {
+					Data         map[string]interface{} `json:"data"`
+					Roles        []struct{ Slug string } `json:"roles"`
+					DeviceGroups []struct{ Slug string } `json:"device_groups"`
+					Tags         []struct{ Slug string } `json:"tags"`
+				} `json:"results"`
+			}
+			json.NewDecoder(resp.Body).Decode(&ctxResp)
+			resp.Body.Close()
+
+			for _, ctx := range ctxResp.Results {
+				// Map this context data to each assigned group type
+				targetGroups := make(map[string]bool)
+				for _, r := range ctx.Roles { targetGroups[r.Slug] = true }
+				for _, dg := range ctx.DeviceGroups { targetGroups[dg.Slug] = true }
+				for _, t := range ctx.Tags { targetGroups[t.Slug] = true }
+
+				for gName := range targetGroups {
+					if gName == "" { continue }
+					// Ensure group exists
+					inv, _ := store.LoadInventory(dir)
+					if _, ok := inv.Groups[gName]; !ok {
+						store.SaveGroup(dir, gName, &models.Group{Name: gName})
+					}
+					// Merge data
+					if err := store.MergeGroupVars(dir, gName, ctx.Data); err != nil {
+						fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging context to group %s: %v", gName, err))
+					}
+				}
+			}
+
+			if ctxResp.Next != nil { cURL = *ctxResp.Next } else { cURL = "" }
+		}
+
+		// 2. Sync Hosts (Devices & VMs)
+		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🖥  Syncing Hosts..."))
 		endpoints := []string{"/api/dcim/devices/", "/api/virtualization/virtual-machines/"}
 		totalSynced := 0
 

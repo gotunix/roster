@@ -520,6 +520,20 @@ func SaveHostVars(baseDir, hostname string, vars map[string]interface{}) error {
 	return os.WriteFile(path, bytes, 0644)
 }
 
+// MergeGroupVars merges a map of variables into a group's existing group_vars file
+func MergeGroupVars(baseDir, groupname string, newVars map[string]interface{}) error {
+	existing, _ := GetGroupVars(baseDir, groupname)
+	if existing == nil {
+		existing = make(map[string]interface{})
+	}
+
+	for k, v := range newVars {
+		existing[k] = v
+	}
+
+	return SaveGroupVars(baseDir, groupname, existing)
+}
+
 // SaveGroupVars overwrites a group's variables in group_vars/<groupname>.yml
 func SaveGroupVars(baseDir, groupname string, vars map[string]interface{}) error {
 	path := filepath.Join(baseDir, "group_vars", groupname+".yml")
