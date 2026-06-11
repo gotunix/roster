@@ -99,32 +99,49 @@ var syncNetboxCmd = &cobra.Command{
 			var ctxResp struct {
 				Next    *string `json:"next"`
 				Results []struct {
+					Name         string                 `json:"name"`
 					Data         map[string]interface{} `json:"data"`
 					Roles        []struct{ Slug string } `json:"roles"`
 					DeviceGroups []struct{ Slug string } `json:"device_groups"`
 					Tags         []struct{ Slug string } `json:"tags"`
+					Platforms    []struct{ Slug string } `json:"platforms"`
+					Sites        []struct{ Slug string } `json:"sites"`
 				} `json:"results"`
 			}
-			json.NewDecoder(resp.Body).Decode(&ctxResp)
+			if err := json.NewDecoder(resp.Body).Decode(&ctxResp); err != nil {
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to decode contexts: %v", err))
+				resp.Body.Close()
+				break
+			}
 			resp.Body.Close()
 
 			for _, ctx := range ctxResp.Results {
 				// Map this context data to each assigned group type
 				targetGroups := make(map[string]bool)
-				for _, r := range ctx.Roles { targetGroups[r.Slug] = true }
-				for _, dg := range ctx.DeviceGroups { targetGroups[dg.Slug] = true }
-				for _, t := range ctx.Tags { targetGroups[t.Slug] = true }
+				for _, r := range ctx.Roles { if r.Slug != "" { targetGroups[r.Slug] = true } }
+				for _, dg := range ctx.DeviceGroups { if dg.Slug != "" { targetGroups[dg.Slug] = true } }
+				for _, t := range ctx.Tags { if t.Slug != "" { targetGroups[t.Slug] = true } }
+				for _, p := range ctx.Platforms { if p.Slug != "" { targetGroups[p.Slug] = true } }
+				for _, s := range ctx.Sites { if s.Slug != "" { targetGroups[s.Slug] = true } }
+
+				if len(targetGroups) == 0 {
+					continue
+				}
+
+				fmt.Fprintln(os.Stderr, ui.DescriptionStyle.Render(fmt.Sprintf("  • Context: %s (mapping to %d groups)", ctx.Name, len(targetGroups))))
 
 				for gName := range targetGroups {
-					if gName == "" { continue }
 					// Ensure group exists
 					inv, _ := store.LoadInventory(dir)
 					if _, ok := inv.Groups[gName]; !ok {
-						store.SaveGroup(dir, gName, &models.Group{Name: gName})
+						if err := store.SaveGroup(dir, gName, &models.Group{Name: gName}); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("  ! Failed to create group %s: %v", gName, err))
+							continue
+						}
 					}
 					// Merge data
 					if err := store.MergeGroupVars(dir, gName, ctx.Data); err != nil {
-						fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging context to group %s: %v", gName, err))
+						fmt.Fprintln(os.Stderr, ui.ErrorMsg("  ! Merging context to group %s: %v", gName, err))
 					}
 				}
 			}
