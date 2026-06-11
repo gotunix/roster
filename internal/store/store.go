@@ -29,6 +29,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,8 +48,8 @@ func LockInventory(baseDir string) error {
 	lockPath := filepath.Join(baseDir, ".roster.lock")
 	globalFlock = flock.New(lockPath)
 
-	// Try to lock with a 10-second timeout
-	locked, err := globalFlock.TryLockContext(nil, 100*time.Millisecond)
+	// Try to lock with a 100ms timeout
+	locked, err := globalFlock.TryLockContext(context.Background(), 100*time.Millisecond)
 	if err != nil {
 		return fmt.Errorf("failed to acquire inventory lock: %v", err)
 	}
