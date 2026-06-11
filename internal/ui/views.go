@@ -473,6 +473,24 @@ func RenderGroupDashboard(inv *models.Inventory) string {
 	return sb.String()
 }
 
+// RenderSingleGroupDashboard renders a detailed dashboard for a single group
+func RenderSingleGroupDashboard(inv *models.Inventory, groupName string) string {
+	g, ok := inv.Groups[groupName]
+	if !ok {
+		return ErrorMsg("group %q not found", groupName)
+	}
+
+	totalWidth := GetTerminalWidth()
+	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
+	contentWidth := totalWidth - 6
+
+	finalContent := renderGroupBlockFull(inv, g, contentWidth, subtleStyle)
+
+	var sb strings.Builder
+	RenderWindow(&sb, fmt.Sprintf("GROUP DASHBOARD: %s", strings.ToUpper(groupName)), strings.TrimSpace(finalContent), totalWidth)
+	return sb.String()
+}
+
 // RenderGroupList renders a sorted list of all groups in the inventory
 func RenderGroupList(inv *models.Inventory) string {
 	if len(inv.Groups) == 0 {

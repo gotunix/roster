@@ -37,9 +37,9 @@ import (
 )
 
 var dashboardCmd = &cobra.Command{
-	Use:   "dashboard [groups]",
+	Use:   "dashboard [group_name|groups]",
 	Short: "Show project overview",
-	Long:  `Show a hierarchical tree view of groups and hosts. Use 'groups' argument to see only group hierarchy.`,
+	Long:  `Show a hierarchical tree view of groups and hosts. Use 'groups' to see hierarchy only, or specify a group name to focus on it.`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		dir := inventoryPaths[0]
@@ -50,8 +50,12 @@ var dashboardCmd = &cobra.Command{
 			return
 		}
 
-		if len(args) > 0 && args[0] == "groups" {
-			fmt.Print(ui.RenderGroupDashboard(inv))
+		if len(args) > 0 {
+			if args[0] == "groups" {
+				fmt.Print(ui.RenderGroupDashboard(inv))
+			} else {
+				fmt.Print(ui.RenderSingleGroupDashboard(inv, args[0]))
+			}
 		} else {
 			fmt.Print(ui.RenderDashboard(inv))
 		}
