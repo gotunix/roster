@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"gotunix.net/roster/internal/models"
 	"gotunix.net/roster/internal/store"
 	"gotunix.net/roster/internal/ui"
 )
@@ -44,6 +45,10 @@ type NetBoxObject struct {
 	PrimaryIP *struct {
 		Address string `json:"address"`
 	} `json:"primary_ip"`
+	Tags []struct {
+		Slug string `json:"slug"`
+		Name string `json:"name"`
+	} `json:"tags"`
 }
 
 var syncCmd = &cobra.Command{
@@ -145,6 +150,28 @@ var syncNetboxCmd = &cobra.Command{
 						ip := strings.Split(obj.PrimaryIP.Address, "/")[0] // Strip CIDR
 						if err := store.SetHostVar(dir, name, "ansible_host", ip); err != nil {
 							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting ansible_host for %s: %v", name, err))
+						}
+					}
+
+					// Handle Tags -> Groups
+					for _, tag := range obj.Tags {
+						groupName := tag.Slug
+						if groupName == "" {
+							continue
+						}
+
+						// Ensure group exists
+						inv, _ := store.LoadInventory(dir)
+						if _, ok := inv.Groups[groupName]; !ok {
+							if err := store.SaveGroup(dir, groupName, &models.Group{Name: groupName}); err != nil {
+								fmt.Fprintln(os.Stderr, ui.ErrorMsg("Creating group %s from tag: %v", groupName, err))
+								continue
+							}
+						}
+
+						// Assign host to group
+						if err := store.AssignHostToGroup(dir, name, groupName); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Assigning %s to group %s: %v", name, groupName, err))
 						}
 					}
 
