@@ -41,7 +41,7 @@ type NetBoxResponse struct {
 
 type NetBoxObject struct {
 	Name      string `json:"name"`
-	PrimaryIP struct {
+	PrimaryIP *struct {
 		Address string `json:"address"`
 	} `json:"primary_ip"`
 }
@@ -77,7 +77,11 @@ var syncNetboxCmd = &cobra.Command{
 		totalSynced := 0
 
 		for _, endpoint := range endpoints {
-			apiURL, _ := url.Parse(baseURL)
+			apiURL, err := url.Parse(baseURL)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Invalid baseURL: %v", err))
+				return
+			}
 			apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + endpoint
 			
 			// Apply filters
@@ -94,7 +98,11 @@ var syncNetboxCmd = &cobra.Command{
 			apiURL.RawQuery = q.Encode()
 
 			client := &http.Client{Timeout: 30 * time.Second}
-			req, _ := http.NewRequest("GET", apiURL.String(), nil)
+			req, err := http.NewRequest("GET", apiURL.String(), nil)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to create request: %v", err))
+				continue
+			}
 			req.Header.Add("Authorization", "Token "+token)
 			req.Header.Add("Accept", "application/json")
 
@@ -129,7 +137,7 @@ var syncNetboxCmd = &cobra.Command{
 				}
 
 				// Map primary IP to ansible_host
-				if obj.PrimaryIP.Address != "" {
+				if obj.PrimaryIP != nil && obj.PrimaryIP.Address != "" {
 					ip := strings.Split(obj.PrimaryIP.Address, "/")[0] // Strip CIDR
 					if err := store.SetHostVar(dir, name, "ansible_host", ip); err != nil {
 						fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting ansible_host for %s: %v", name, err))
