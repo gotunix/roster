@@ -41,6 +41,7 @@ type NetBoxResponse struct {
 }
 
 type NetBoxObject struct {
+	ID           int                    `json:"id"`
 	Name         string                 `json:"name"`
 	Description  string                 `json:"description"`
 	LocalContext map[string]interface{} `json:"local_context_data"`
@@ -193,7 +194,12 @@ var syncNetboxCmd = &cobra.Command{
 		endpoints := []string{"/api/dcim/devices/", "/api/virtualization/virtual-machines/"}
 		totalSynced := 0
 
+		// Keep track of synced IDs to map interfaces/disks later
+		deviceIDs := make(map[int]string) // id -> name
+		vmIDs := make(map[int]string)     // id -> name
+
 		for _, endpoint := range endpoints {
+			isVM := strings.Contains(endpoint, "virtual-machines")
 			apiURL, err := url.Parse(baseURL)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Invalid baseURL: %v", err))
@@ -250,6 +256,12 @@ var syncNetboxCmd = &cobra.Command{
 					name := obj.Name
 					if name == "" {
 						continue
+					}
+
+					if isVM {
+						vmIDs[obj.ID] = name
+					} else {
+						deviceIDs[obj.ID] = name
 					}
 
 					// Add host
@@ -341,6 +353,148 @@ var syncNetboxCmd = &cobra.Command{
 				// Move to next page
 				if nbResp.Next != nil {
 					currentURL = *nbResp.Next
+				} else {
+					currentURL = ""
+				}
+			}
+		}
+
+		// 3. Sync Interfaces
+		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🔌 Syncing Interfaces..."))
+		interfaceEndpoints := []struct {
+			path string
+			key  string
+			ids  map[int]string
+		}{
+			{"/api/dcim/interfaces/", "device_id", deviceIDs},
+			{"/api/virtualization/interfaces/", "virtual_machine_id", vmIDs},
+		}
+
+		for _, ie := range interfaceEndpoints {
+			if len(ie.ids) == 0 {
+				continue
+			}
+
+			apiURL, _ := url.Parse(baseURL)
+			apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + ie.path
+			currentURL := apiURL.String()
+
+			for currentURL != "" {
+				client := &http.Client{Timeout: 30 * time.Second}
+				req, _ := http.NewRequest("GET", currentURL, nil)
+				req.Header.Add("Authorization", "Token "+token)
+				req.Header.Add("Accept", "application/json")
+
+				resp, err := client.Do(req)
+				if err != nil {
+					break
+				}
+
+				var intfResp struct {
+					Next    *string `json:"next"`
+					Results []struct {
+						Name       string      `json:"name"`
+						MAC        string      `json:"mac_address"`
+						MTU        int         `json:"mtu"`
+						Enabled    bool        `json:"enabled"`
+						Device     struct{ ID int } `json:"device"`
+						VM         struct{ ID int } `json:"virtual_machine"`
+					} `json:"results"`
+				}
+				json.NewDecoder(resp.Body).Decode(&intfResp)
+				resp.Body.Close()
+
+				for _, intf := range intfResp.Results {
+					hostID := intf.Device.ID
+					if hostID == 0 {
+						hostID = intf.VM.ID
+					}
+
+					hName, ok := ie.ids[hostID]
+					if !ok {
+						continue
+					}
+
+					intfData := map[string]interface{}{
+						"name":    intf.Name,
+						"enabled": intf.Enabled,
+					}
+					if intf.MAC != "" {
+						intfData["mac"] = intf.MAC
+					}
+					if intf.MTU != 0 {
+						intfData["mtu"] = intf.MTU
+					}
+
+					// Merge into netbox.interfaces (list)
+					// Note: Since MergeHostVars handles maps, we'll store interfaces as a map keyed by name
+					// for easier deep merging without duplication
+					interfaceMap := map[string]interface{}{
+						"interfaces": map[string]interface{}{
+							intf.Name: intfData,
+						},
+					}
+					store.MergeHostVars(dir, hName, map[string]interface{}{"netbox": interfaceMap})
+				}
+
+				if intfResp.Next != nil {
+					currentURL = *intfResp.Next
+				} else {
+					currentURL = ""
+				}
+			}
+		}
+
+		// 4. Sync VM Disks
+		if len(vmIDs) > 0 {
+			fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("💾 Syncing VM Disks..."))
+			apiURL, _ := url.Parse(baseURL)
+			apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + "/api/virtualization/disks/"
+			currentURL := apiURL.String()
+
+			for currentURL != "" {
+				client := &http.Client{Timeout: 30 * time.Second}
+				req, _ := http.NewRequest("GET", currentURL, nil)
+				req.Header.Add("Authorization", "Token "+token)
+				req.Header.Add("Accept", "application/json")
+
+				resp, err := client.Do(req)
+				if err != nil {
+					break
+				}
+
+				var diskResp struct {
+					Next    *string `json:"next"`
+					Results []struct {
+						Name string      `json:"name"`
+						Size int         `json:"size"`
+						VM   struct{ ID int } `json:"virtual_machine"`
+					} `json:"results"`
+				}
+				json.NewDecoder(resp.Body).Decode(&diskResp)
+				resp.Body.Close()
+
+				for _, disk := range diskResp.Results {
+					hName, ok := vmIDs[disk.VM.ID]
+					if !ok {
+						continue
+					}
+
+					diskData := map[string]interface{}{
+						"name": disk.Name,
+						"size": disk.Size,
+					}
+
+					diskMap := map[string]interface{}{
+						"disks": map[string]interface{}{
+							disk.Name: diskData,
+						},
+					}
+					store.MergeHostVars(dir, hName, map[string]interface{}{"netbox": diskMap})
+				}
+
+				if diskResp.Next != nil {
+					currentURL = *diskResp.Next
 				} else {
 					currentURL = ""
 				}
