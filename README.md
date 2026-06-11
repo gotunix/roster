@@ -1,13 +1,14 @@
 # Roster
 
-A high-performance CLI engine for managing Ansible inventories using standard YAML formats.
+A high-performance CLI engine for managing Ansible inventories using standard YAML formats, with native **NetBox** synchronization.
 
 ## Features
 - **Git-First**: Designed to manage YAML files that live alongside your code.
-- **Hierarchical View**: Beautiful tree-based dashboard.
-- **Variable Management**: Simple CLI to set and view `host_vars` and `group_vars`.
+- **NetBox Sync**: Seamlessly import hosts, groups, config contexts, and network details from NetBox.
+- **Hierarchical View**: Beautiful, adaptive tree-based dashboard that scales to any terminal size.
+- **Deep Variable Management**: Support for nested variables and recursive merging.
 - **Standard YAML**: No custom drivers needed; works with standard `ansible-playbook`.
-- **Export & Reporting**: Aggregate data across multiple inventories to CSV or email reports.
+- **Export & Reporting**: Aggregate data across multiple inventories with custom headers and dot-notation support.
 
 ## Installation
 
@@ -34,44 +35,42 @@ roster init -i [directory]
 
 ### Dashboard
 ```bash
-roster dashboard
+roster dashboard           # Full overview
+roster dashboard <group>   # Focused group view
+roster dashboard groups    # Global group hierarchy only
 ```
-Visualizes your inventory in a hierarchical tree. Use `Ctrl+E` on a selected host or group to open your `$EDITOR` with automatic YAML syntax highlighting.
+
+### NetBox Sync
+Keep your inventory in sync with NetBox (requires `NETBOX_TOKEN`):
+```bash
+# Sync all active devices and VMs
+export NETBOX_TOKEN="your_token"
+roster sync netbox https://netbox.example.com --filter "status=active"
+```
 
 ### Manage Hosts
 ```bash
-roster host add <hostname>
-roster host list
+roster host add <host1,host2,...>
+roster host list [group]            # Compact grid
+roster host list groups             # Detailed tree grid
 roster host view <hostname>
-roster host edit <hostname>
-roster host move <hostname> <destination_dir>
+roster host edit <hostname> [-e]    # Use -e for external $EDITOR
 roster host remove <hostname>
 ```
 
 ### Manage Groups
 ```bash
-roster group add <groupname>
-roster group assign <hostname> <group1,group2,...>
-roster group copy <source_group> <dest_group>
-roster group list
+roster group add <group1,group2,...>
+roster group assign <h1,h2> <g1,g2> # Many-to-many assignment
+roster group nest <child> <parent>  # Hierarchical grouping
+roster group list                   # Multi-column list with hierarchy info
 roster group view <groupname>
-roster group edit <groupname>
-```
-
-### Manage Variables
-```bash
-roster vars set <host|group> <name> <key>=<value>
-roster vars edit <host|group> <name>
 ```
 
 ### Export & Reporting
-Aggregate host data across multiple inventories:
 ```bash
-# Export to CSV
-roster export -i ./inv1 -i ./inv2 --vars ansible_host,ansible_user -o report.csv
-
-# Exclude specific groups
-roster export --exclude production,testing
+# Export with custom headers and nested variables
+roster export --vars "site:Location, networking.ip:Internal IP" -o report.csv
 
 # Email report directly
 roster export --email admin@example.com
@@ -79,19 +78,17 @@ roster export --email admin@example.com
 
 ## Configuration
 
-### SMTP Settings
-To use the `--email` feature in `roster export`, configure the following environment variables:
-- `ROSTER_SMTP_HOST`: SMTP server address
-- `ROSTER_SMTP_PORT`: SMTP server port
-- `ROSTER_SMTP_USER`: SMTP username
-- `ROSTER_SMTP_PASS`: SMTP password
-- `ROSTER_SMTP_FROM`: Sender email address
+### SMTP Settings (for Email Export)
+- `ROSTER_SMTP_HOST`, `ROSTER_SMTP_PORT`
+- `ROSTER_SMTP_USER`, `ROSTER_SMTP_PASS` (Optional)
+- `ROSTER_SMTP_FROM`
 
 ## UI & Colors
-Roster shares a consistent visual identity:
+Roster adapts to your terminal size:
 - **Folders/Groups**: Magenta 📂
 - **Hosts**: Green 🖥
-- **Variables**: Cyan
+- **Nested Groups**: Cyan 📂
+- **Metadata/Descriptions**: Subtle Gray
 
 ## License
 GNU General Public License v3.0 or later. See [LICENSE](LICENSE) for details.
