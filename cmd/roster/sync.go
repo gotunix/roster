@@ -83,7 +83,7 @@ var syncNetboxCmd = &cobra.Command{
 				return
 			}
 			apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + endpoint
-			
+
 			// Apply filters
 			q := apiURL.Query()
 			if syncFilter != "" {
@@ -96,55 +96,67 @@ var syncNetboxCmd = &cobra.Command{
 				}
 			}
 			apiURL.RawQuery = q.Encode()
+			currentURL := apiURL.String()
 
-			client := &http.Client{Timeout: 30 * time.Second}
-			req, err := http.NewRequest("GET", apiURL.String(), nil)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to create request: %v", err))
-				continue
-			}
-			req.Header.Add("Authorization", "Token "+token)
-			req.Header.Add("Accept", "application/json")
+			for currentURL != "" {
+				client := &http.Client{Timeout: 30 * time.Second}
+				req, err := http.NewRequest("GET", currentURL, nil)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to create request: %v", err))
+					break
+				}
+				req.Header.Add("Authorization", "Token "+token)
+				req.Header.Add("Accept", "application/json")
 
-			resp, err := client.Do(req)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Request failed: %v", err))
-				continue
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				fmt.Fprintln(os.Stderr, ui.ErrorMsg("API returned status: %s", resp.Status))
-				continue
-			}
-
-			var nbResp NetBoxResponse
-			if err := json.NewDecoder(resp.Body).Decode(&nbResp); err != nil {
-				fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to decode response: %v", err))
-				continue
-			}
-
-			for _, obj := range nbResp.Results {
-				name := obj.Name
-				if name == "" {
-					continue
+				resp, err := client.Do(req)
+				if err != nil {
+					fmt.Fprintln(os.Stderr, ui.ErrorMsg("Request failed: %v", err))
+					break
 				}
 
-				// Add host
-				if err := store.AddHostToMain(dir, name); err != nil {
-					fmt.Fprintln(os.Stderr, ui.ErrorMsg("Adding host %s: %v", name, err))
-					continue
+				if resp.StatusCode != http.StatusOK {
+					fmt.Fprintln(os.Stderr, ui.ErrorMsg("API returned status %s for %s", resp.Status, currentURL))
+					resp.Body.Close()
+					break
 				}
 
-				// Map primary IP to ansible_host
-				if obj.PrimaryIP != nil && obj.PrimaryIP.Address != "" {
-					ip := strings.Split(obj.PrimaryIP.Address, "/")[0] // Strip CIDR
-					if err := store.SetHostVar(dir, name, "ansible_host", ip); err != nil {
-						fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting ansible_host for %s: %v", name, err))
+				var nbResp NetBoxResponse
+				if err := json.NewDecoder(resp.Body).Decode(&nbResp); err != nil {
+					fmt.Fprintln(os.Stderr, ui.ErrorMsg("Failed to decode response: %v", err))
+					resp.Body.Close()
+					break
+				}
+				resp.Body.Close()
+
+				for _, obj := range nbResp.Results {
+					name := obj.Name
+					if name == "" {
+						continue
 					}
+
+					// Add host
+					if err := store.AddHostToMain(dir, name); err != nil {
+						fmt.Fprintln(os.Stderr, ui.ErrorMsg("Adding host %s: %v", name, err))
+						continue
+					}
+
+					// Map primary IP to ansible_host
+					if obj.PrimaryIP != nil && obj.PrimaryIP.Address != "" {
+						ip := strings.Split(obj.PrimaryIP.Address, "/")[0] // Strip CIDR
+						if err := store.SetHostVar(dir, name, "ansible_host", ip); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting ansible_host for %s: %v", name, err))
+						}
+					}
+
+					totalSynced++
 				}
 
-				totalSynced++
+				// Move to next page
+				if nbResp.Next != nil {
+					currentURL = *nbResp.Next
+				} else {
+					currentURL = ""
+				}
 			}
 		}
 
