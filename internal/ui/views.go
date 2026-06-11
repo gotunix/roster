@@ -231,6 +231,19 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 	}
 
 	var listSb strings.Builder
+
+	// Add summary count
+	statsStyle := lipgloss.NewStyle().
+		Foreground(Subtle).
+		Italic(true).
+		PaddingBottom(1)
+
+	countMsg := fmt.Sprintf("Inventory contains %d hosts", len(hosts))
+	if groupFilter != "" {
+		countMsg = fmt.Sprintf("Group %q contains %d hosts", groupFilter, len(hosts))
+	}
+	listSb.WriteString(statsStyle.Render(countMsg) + "\n\n")
+
 	for i := 0; i < len(entries); i += numCols {
 		for j := 0; j < numCols; j++ {
 			idx := i + j
@@ -253,7 +266,7 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 	}
 
 	var sb strings.Builder
-	RenderWindow(&sb, title, strings.TrimSpace(listSb.String()), totalWidth)
+	RenderWindow(&sb, title, strings.Trim(listSb.String(), "\n"), totalWidth)
 	return sb.String()
 }
 
