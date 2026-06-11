@@ -108,34 +108,44 @@ var groupAddCmd = &cobra.Command{
 }
 
 var groupAssignCmd = &cobra.Command{
-	Use:   "assign <hostname> <groupname1,group2,...>",
-	Short: "Assign a host to one or more groups",
+	Use:   "assign <host1,host2,...> <group1,group2,...>",
+	Short: "Assign one or more hosts to one or more groups",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		hostname := args[0]
+		hostList := args[0]
 		groupList := args[1]
 		dir := inventoryPaths[0]
 
-		inv, err := store.LoadInventory(dir)
-		if err != nil {
-			fmt.Println(ui.ErrorMsg("Loading inventory: %v", err))
-			return
-		}
-		if _, ok := inv.Hosts[hostname]; !ok {
-			fmt.Println(ui.ErrorMsg("Host %q not found in inventory", hostname))
-			return
-		}
-
+		hosts := strings.Split(hostList, ",")
 		groups := strings.Split(groupList, ",")
-		for _, groupname := range groups {
-			groupname = strings.TrimSpace(groupname)
-			if groupname == "" {
+
+		for _, hName := range hosts {
+			hName = strings.TrimSpace(hName)
+			if hName == "" {
 				continue
 			}
-			if err := store.AssignHostToGroup(dir, hostname, groupname); err != nil {
-				fmt.Println(ui.ErrorMsg("Assigning %s to %s: %v", hostname, groupname, err))
-			} else {
-				fmt.Println(ui.SuccessMsg("Host %s assigned to group %s", hostname, groupname))
+
+			// Validate host exists
+			inv, err := store.LoadInventory(dir)
+			if err != nil {
+				fmt.Println(ui.ErrorMsg("Loading inventory: %v", err))
+				return
+			}
+			if _, ok := inv.Hosts[hName]; !ok {
+				fmt.Println(ui.ErrorMsg("Host %q not found in inventory", hName))
+				continue
+			}
+
+			for _, groupname := range groups {
+				groupname = strings.TrimSpace(groupname)
+				if groupname == "" {
+					continue
+				}
+				if err := store.AssignHostToGroup(dir, hName, groupname); err != nil {
+					fmt.Println(ui.ErrorMsg("Assigning %s to %s: %v", hName, groupname, err))
+				} else {
+					fmt.Println(ui.SuccessMsg("Host %s assigned to group %s", hName, groupname))
+				}
 			}
 		}
 	},

@@ -30,6 +30,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"gotunix.net/roster/internal/interactive"
@@ -92,17 +93,25 @@ var hostViewCmd = &cobra.Command{
 }
 
 var hostAddCmd = &cobra.Command{
-	Use:   "add <hostname>",
-	Short: "Add a new host to the inventory",
+	Use:   "add <hostname1,host2,...>",
+	Short: "Add one or more hosts to the inventory",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		hostname := args[0]
+		hostList := args[0]
 		dir := inventoryPaths[0]
 
-		if err := store.AddHostToMain(dir, hostname); err != nil {
-			fmt.Println(ui.ErrorMsg("%v", err))
-		} else {
-			fmt.Println(ui.SuccessMsg("Host %s added successfully", hostname))
+		hosts := strings.Split(hostList, ",")
+		for _, hostname := range hosts {
+			hostname = strings.TrimSpace(hostname)
+			if hostname == "" {
+				continue
+			}
+
+			if err := store.AddHostToMain(dir, hostname); err != nil {
+				fmt.Println(ui.ErrorMsg("Adding host %s: %v", hostname, err))
+			} else {
+				fmt.Println(ui.SuccessMsg("Host %s added successfully", hostname))
+			}
 		}
 	},
 }
