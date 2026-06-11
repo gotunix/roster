@@ -361,13 +361,21 @@ var syncNetboxCmd = &cobra.Command{
 
 		// 3. Sync Interfaces
 		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🔌 Syncing Interfaces..."))
+		
+		// interfaceID -> hostName
+		intfToHost := make(map[int]string)
+		// interfaceID -> interfaceName
+		intfToName := make(map[int]string)
+		// Track if it's a VM interface to distinguish overlapping IDs if necessary (though NetBox IDs are usually unique)
+		isVMIntf := make(map[int]bool)
+
 		interfaceEndpoints := []struct {
 			path string
-			key  string
 			ids  map[int]string
+			isVM bool
 		}{
-			{"/api/dcim/interfaces/", "device_id", deviceIDs},
-			{"/api/virtualization/interfaces/", "virtual_machine_id", vmIDs},
+			{"/api/dcim/interfaces/", deviceIDs, false},
+			{"/api/virtualization/interfaces/", vmIDs, true},
 		}
 
 		for _, ie := range interfaceEndpoints {
@@ -393,6 +401,7 @@ var syncNetboxCmd = &cobra.Command{
 				var intfResp struct {
 					Next    *string `json:"next"`
 					Results []struct {
+						ID         int         `json:"id"`
 						Name       string      `json:"name"`
 						MAC        string      `json:"mac_address"`
 						MTU        int         `json:"mtu"`
@@ -415,6 +424,11 @@ var syncNetboxCmd = &cobra.Command{
 						continue
 					}
 
+					// Track for IP mapping
+					intfToHost[intf.ID] = hName
+					intfToName[intf.ID] = intf.Name
+					isVMIntf[intf.ID] = ie.isVM
+
 					intfData := map[string]interface{}{
 						"name":    intf.Name,
 						"enabled": intf.Enabled,
@@ -426,9 +440,6 @@ var syncNetboxCmd = &cobra.Command{
 						intfData["mtu"] = intf.MTU
 					}
 
-					// Merge into netbox.interfaces (list)
-					// Note: Since MergeHostVars handles maps, we'll store interfaces as a map keyed by name
-					// for easier deep merging without duplication
 					interfaceMap := map[string]interface{}{
 						"interfaces": map[string]interface{}{
 							intf.Name: intfData,
@@ -445,7 +456,77 @@ var syncNetboxCmd = &cobra.Command{
 			}
 		}
 
-		// 4. Sync VM Disks
+		// 4. Sync IP Addresses
+		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🌐 Syncing IP Addresses..."))
+		ipURL, _ := url.Parse(baseURL)
+		ipURL.Path = strings.TrimSuffix(ipURL.Path, "/") + "/api/ipam/ip-addresses/"
+		currentIPURL := ipURL.String()
+
+		for currentIPURL != "" {
+			client := &http.Client{Timeout: 30 * time.Second}
+			req, _ := http.NewRequest("GET", currentIPURL, nil)
+			req.Header.Add("Authorization", "Token "+token)
+			req.Header.Add("Accept", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				break
+			}
+
+			var ipResp struct {
+				Next    *string `json:"next"`
+				Results []struct {
+					Address           string `json:"address"`
+					Status            struct{ Value string } `json:"status"`
+					AssignedObjectID  int    `json:"assigned_object_id"`
+					AssignedObjectType string `json:"assigned_object_type"`
+				} `json:"results"`
+			}
+			json.NewDecoder(resp.Body).Decode(&ipResp)
+			resp.Body.Close()
+
+			for _, ip := range ipResp.Results {
+				if ip.AssignedObjectID == 0 {
+					continue
+				}
+
+				// Verify this IP belongs to a host we synced
+				hName, ok := intfToHost[ip.AssignedObjectID]
+				if !ok {
+					continue
+				}
+
+				// Check if the assignment type matches (dcim.interface or virtualization.vminterface)
+				isVM := strings.Contains(ip.AssignedObjectType, "vminterface")
+				if isVM != isVMIntf[ip.AssignedObjectID] {
+					continue
+				}
+
+				intfName := intfToName[ip.AssignedObjectID]
+				
+				ipMap := map[string]interface{}{
+					"interfaces": map[string]interface{}{
+						intfName: map[string]interface{}{
+							"ips": map[string]interface{}{
+								ip.Address: map[string]interface{}{
+									"status": ip.Status.Value,
+								},
+							},
+						},
+					},
+				}
+
+				store.MergeHostVars(dir, hName, map[string]interface{}{"netbox": ipMap})
+			}
+
+			if ipResp.Next != nil {
+				currentIPURL = *ipResp.Next
+			} else {
+				currentIPURL = ""
+			}
+		}
+
+		// 5. Sync VM Disks
 		if len(vmIDs) > 0 {
 			fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("💾 Syncing VM Disks..."))
 			apiURL, _ := url.Parse(baseURL)
