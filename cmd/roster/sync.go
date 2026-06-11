@@ -41,9 +41,10 @@ type NetBoxResponse struct {
 }
 
 type NetBoxObject struct {
-	Name      string `json:"name"`
-	Description string `json:"description"`
-	PrimaryIP *struct {
+	Name          string                 `json:"name"`
+	Description   string                 `json:"description"`
+	ConfigContext map[string]interface{} `json:"config_context"`
+	PrimaryIP     *struct {
 		Address string `json:"address"`
 	} `json:"primary_ip"`
 	Tags []struct {
@@ -158,6 +159,13 @@ var syncNetboxCmd = &cobra.Command{
 					if obj.Description != "" {
 						if err := store.SetHostVar(dir, name, "description", obj.Description); err != nil {
 							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting description for %s: %v", name, err))
+						}
+					}
+
+					// Map config context
+					if len(obj.ConfigContext) > 0 {
+						if err := store.MergeHostVars(dir, name, obj.ConfigContext); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging config_context for %s: %v", name, err))
 						}
 					}
 

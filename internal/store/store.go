@@ -499,6 +499,20 @@ func RemoveGroup(baseDir, groupName string) error {
 	return nil
 }
 
+// MergeHostVars merges a map of variables into a host's existing host_vars file
+func MergeHostVars(baseDir, hostname string, newVars map[string]interface{}) error {
+	existing, _ := GetHostVars(baseDir, hostname)
+	if existing == nil {
+		existing = make(map[string]interface{})
+	}
+
+	for k, v := range newVars {
+		existing[k] = v
+	}
+
+	return SaveHostVars(baseDir, hostname, existing)
+}
+
 // SaveHostVars overwrites a host's variables in host_vars/<hostname>.yml
 func SaveHostVars(baseDir, hostname string, vars map[string]interface{}) error {
 	path := filepath.Join(baseDir, "host_vars", hostname+".yml")
