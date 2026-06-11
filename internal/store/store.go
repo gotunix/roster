@@ -275,13 +275,13 @@ func AddHostToMain(baseDir, hostname string) error {
 	}
 
 	all, ok := raw["all"].(map[string]interface{})
-	if !ok {
+	if !ok || all == nil {
 		all = make(map[string]interface{})
 		raw["all"] = all
 	}
 
 	hosts, ok := all["hosts"].(map[string]interface{})
-	if !ok {
+	if !ok || hosts == nil {
 		hosts = make(map[string]interface{})
 		all["hosts"] = hosts
 	}
@@ -294,6 +294,9 @@ func AddHostToMain(baseDir, hostname string) error {
 
 // SaveGroup writes a group's data to a specific YAML file
 func SaveGroup(baseDir, groupName string, group *models.Group) error {
+	if group == nil {
+		return fmt.Errorf("group cannot be nil")
+	}
 	path := filepath.Join(baseDir, groupName+".yaml")
 
 	// Construct Ansible-compatible group map
@@ -428,8 +431,8 @@ func RemoveHost(baseDir, hostname string) error {
 	data, _ := os.ReadFile(mainPath)
 	var raw map[string]interface{}
 	yaml.Unmarshal(data, &raw)
-	if all, ok := raw["all"].(map[string]interface{}); ok {
-		if hosts, ok := all["hosts"].(map[string]interface{}); ok {
+	if all, ok := raw["all"].(map[string]interface{}); ok && all != nil {
+		if hosts, ok := all["hosts"].(map[string]interface{}); ok && hosts != nil {
 			delete(hosts, hostname)
 		}
 	}
@@ -451,8 +454,8 @@ func RemoveHost(baseDir, hostname string) error {
 
 		changed := false
 		for _, content := range gRaw {
-			if cMap, ok := content.(map[string]interface{}); ok {
-				if hosts, ok := cMap["hosts"].(map[string]interface{}); ok {
+			if cMap, ok := content.(map[string]interface{}); ok && cMap != nil {
+				if hosts, ok := cMap["hosts"].(map[string]interface{}); ok && hosts != nil {
 					if _, ok := hosts[hostname]; ok {
 						delete(hosts, hostname)
 						changed = true
@@ -690,9 +693,9 @@ func LoadInventory(baseDir string) (*models.Inventory, error) {
 				inv.Groups[groupName] = group
 			}
 
-			if cMap, ok := content.(map[string]interface{}); ok {
+			if cMap, ok := content.(map[string]interface{}); ok && cMap != nil {
 				// Handle hosts in group
-				if hosts, ok := cMap["hosts"].(map[string]interface{}); ok {
+				if hosts, ok := cMap["hosts"].(map[string]interface{}); ok && hosts != nil {
 					for hName := range hosts {
 						found := false
 						for _, existing := range group.Hosts {
@@ -711,7 +714,7 @@ func LoadInventory(baseDir string) (*models.Inventory, error) {
 					}
 				}
 				// Handle children groups
-				if children, ok := cMap["children"].(map[string]interface{}); ok {
+				if children, ok := cMap["children"].(map[string]interface{}); ok && children != nil {
 					for childName := range children {
 						found := false
 						for _, existing := range group.Children {
@@ -726,7 +729,7 @@ func LoadInventory(baseDir string) (*models.Inventory, error) {
 					}
 				}
 				// Handle inline vars (though Ansible often uses group_vars files)
-				if v, ok := cMap["vars"].(map[string]interface{}); ok {
+				if v, ok := cMap["vars"].(map[string]interface{}); ok && v != nil {
 					if group.Vars == nil {
 						group.Vars = make(map[string]interface{})
 					}
