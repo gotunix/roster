@@ -270,18 +270,23 @@ func AddHostToMain(baseDir, hostname string) error {
 
 	var raw map[string]interface{}
 	yaml.Unmarshal(data, &raw)
-
-	if all, ok := raw["all"].(map[string]interface{}); ok {
-		if hosts, ok := all["hosts"].(map[string]interface{}); ok {
-			hosts[hostname] = make(map[string]interface{})
-		} else {
-			all["hosts"] = map[string]interface{}{hostname: make(map[string]interface{})}
-		}
-	} else {
-		raw["all"] = map[string]interface{}{
-			"hosts": map[string]interface{}{hostname: make(map[string]interface{})},
-		}
+	if raw == nil {
+		raw = make(map[string]interface{})
 	}
+
+	all, ok := raw["all"].(map[string]interface{})
+	if !ok {
+		all = make(map[string]interface{})
+		raw["all"] = all
+	}
+
+	hosts, ok := all["hosts"].(map[string]interface{})
+	if !ok {
+		hosts = make(map[string]interface{})
+		all["hosts"] = hosts
+	}
+
+	hosts[hostname] = make(map[string]interface{})
 
 	bytes, _ := yaml.Marshal(raw)
 	return os.WriteFile(mainPath, bytes, 0644)
