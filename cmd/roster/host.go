@@ -44,8 +44,8 @@ var hostCmd = &cobra.Command{
 }
 
 var hostListCmd = &cobra.Command{
-	Use:   "list [group]",
-	Short: "List hosts in an inventory, optionally filtered by group",
+	Use:   "list [groups|group_name]",
+	Short: "List hosts in an inventory. Use 'groups' to show hierarchy.",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		dir := inventoryPaths[0]
@@ -56,11 +56,17 @@ var hostListCmd = &cobra.Command{
 		}
 
 		groupFilter := ""
+		showGroups := false
+
 		if len(args) > 0 {
-			groupFilter = args[0]
+			if args[0] == "groups" {
+				showGroups = true
+			} else {
+				groupFilter = args[0]
+			}
 		}
 
-		fmt.Print(ui.RenderHostList(inv, groupFilter))
+		fmt.Print(ui.RenderHostList(inv, groupFilter, showGroups))
 	},
 }
 

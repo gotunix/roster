@@ -156,7 +156,7 @@ func RenderVersion() error {
 }
 
 // RenderHostList renders a sorted list of hosts, optionally filtered by group
-func RenderHostList(inv *models.Inventory, groupFilter string) string {
+func RenderHostList(inv *models.Inventory, groupFilter string, showGroups bool) string {
 	title := "HOSTS"
 	var hosts []string
 
@@ -204,25 +204,27 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 		}
 		bSb.WriteString(hostDisplay + "\n")
 
-		// 2. Groups tree
-		var groups []string
-		for gName, g := range inv.Groups {
-			for _, member := range g.Hosts {
-				if member == hName {
-					groups = append(groups, gName)
-					break
+		// 2. Groups tree (conditional)
+		if showGroups {
+			var groups []string
+			for gName, g := range inv.Groups {
+				for _, member := range g.Hosts {
+					if member == hName {
+						groups = append(groups, gName)
+						break
+					}
 				}
 			}
-		}
-		sort.Strings(groups)
-		for i, gName := range groups {
-			branch := " ├─ "
-			if i == len(groups)-1 {
-				branch = " └─ "
-			}
-			bSb.WriteString(subtleStyle.Render(branch) + subtleStyle.Render(gName) + "\n")
-			if len(gName)+4 > rawWidth {
-				rawWidth = len(gName) + 4
+			sort.Strings(groups)
+			for i, gName := range groups {
+				branch := " ├─ "
+				if i == len(groups)-1 {
+					branch = " └─ "
+				}
+				bSb.WriteString(subtleStyle.Render(branch) + subtleStyle.Render(gName) + "\n")
+				if len(gName)+4 > rawWidth {
+					rawWidth = len(gName) + 4
+				}
 			}
 		}
 
