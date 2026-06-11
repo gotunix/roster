@@ -282,7 +282,7 @@ func RenderDashboard(inv *models.Inventory) string {
 		PaddingBottom(1)
 	header := statsStyle.Render(fmt.Sprintf("Inventory contains %d groups and %d hosts", len(inv.Groups), len(inv.Hosts)))
 
-	// Sort groups but keep 'all' separate
+	// Sort groups but keep 'all' for the end
 	var gNames []string
 	hasAll := false
 	for name := range inv.Groups {
@@ -295,107 +295,34 @@ func RenderDashboard(inv *models.Inventory) string {
 	sort.Strings(gNames)
 
 	var blocks []string
-	maxBlockWidth := 0
+	contentWidth := totalWidth - 6
 
 	for _, gName := range gNames {
 		g := inv.Groups[gName]
-		blockStr := renderGroupBlock(inv, g, subtleStyle)
-		blocks = append(blocks, blockStr)
-		w := lipgloss.Width(blockStr)
-		if w > maxBlockWidth {
-			maxBlockWidth = w
-		}
+		blocks = append(blocks, renderGroupBlockFull(inv, g, contentWidth, subtleStyle))
 	}
 
-	// Arrange blocks into rows
-	contentWidth := totalWidth - 6
-	numCols := contentWidth / (maxBlockWidth + 4)
-	if numCols < 1 {
-		numCols = 1
-	}
-
-	var rows []string
-	for i := 0; i < len(blocks); i += numCols {
-		end := i + numCols
-		if end > len(blocks) {
-			end = len(blocks)
-		}
-
-		rowBlocks := blocks[i:end]
-		for j := range rowBlocks {
-			if j < len(rowBlocks)-1 {
-				rowBlocks[j] = lipgloss.NewStyle().MarginRight(4).Render(rowBlocks[j])
-			}
-		}
-		rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, rowBlocks...))
-	}
-
-	finalContent := header + "\n\n" + strings.Join(rows, "\n\n")
-
-	// Append 'all' group at the end as a special full-width block
+	// Append 'all' group at the end
 	if hasAll {
 		allGroup := inv.Groups["all"]
-		allBlock := renderAllGroupBlock(inv, allGroup, totalWidth-6, subtleStyle)
-		finalContent += "\n\n" + allBlock
+		blocks = append(blocks, renderGroupBlockFull(inv, allGroup, contentWidth, subtleStyle))
 	}
+
+	finalContent := header + "\n\n" + strings.Join(blocks, "\n\n")
 
 	var sb strings.Builder
 	RenderWindow(&sb, "ANSIBLE INVENTORY", strings.TrimSpace(finalContent), totalWidth)
 	return sb.String()
 }
 
-func renderGroupBlock(inv *models.Inventory, g *models.Group, subtleStyle lipgloss.Style) string {
+func renderGroupBlockFull(inv *models.Inventory, g *models.Group, width int, subtleStyle lipgloss.Style) string {
 	var blockSb strings.Builder
 
 	blockSb.WriteString(fmt.Sprintf("%s %s\n",
 		lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
 		BoldStyle.Foreground(Magenta).Render(strings.ToUpper(g.Name))))
-
-	// Hosts in group
-	sort.Strings(g.Hosts)
-	for i, hName := range g.Hosts {
-		branch := subtleStyle.Render("├─")
-		if i == len(g.Hosts)-1 && len(g.Children) == 0 {
-			branch = subtleStyle.Render("└─")
-		}
-
-		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
-		if h, ok := inv.Hosts[hName]; ok && h.Vars != nil {
-			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
-				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
-			}
-		}
-
-		blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
-			branch,
-			lipgloss.NewStyle().Foreground(Green).Render("🖥 "),
-			hostDisplay))
-	}
 
 	// Children groups
-	sort.Strings(g.Children)
-	for i, cName := range g.Children {
-		branch := subtleStyle.Render("├─")
-		if i == len(g.Children)-1 {
-			branch = subtleStyle.Render("└─")
-		}
-		blockSb.WriteString(fmt.Sprintf("  %s %s %s\n",
-			branch,
-			lipgloss.NewStyle().Foreground(Cyan).Render("📂"),
-			BoldStyle.Foreground(Cyan).Render(cName)))
-	}
-
-	return blockSb.String()
-}
-
-func renderAllGroupBlock(inv *models.Inventory, g *models.Group, width int, subtleStyle lipgloss.Style) string {
-	var blockSb strings.Builder
-
-	blockSb.WriteString(fmt.Sprintf("%s %s\n",
-		lipgloss.NewStyle().Foreground(Magenta).Render("📂"),
-		BoldStyle.Foreground(Magenta).Render(strings.ToUpper(g.Name))))
-
-	// Children groups (usually none for 'all', but handle anyway)
 	if len(g.Children) > 0 {
 		sort.Strings(g.Children)
 		for _, cName := range g.Children {
@@ -409,6 +336,11 @@ func renderAllGroupBlock(inv *models.Inventory, g *models.Group, width int, subt
 
 	// Multi-column Hosts
 	sort.Strings(g.Hosts)
+	if len(g.Hosts) == 0 && len(g.Children) == 0 {
+		blockSb.WriteString("  " + DescriptionStyle.Render("(empty)") + "\n")
+		return blockSb.String()
+	}
+
 	var hostEntries []string
 	maxHostWidth := 0
 
@@ -475,7 +407,7 @@ func RenderGroupDashboard(inv *models.Inventory) string {
 	sort.Strings(gNames)
 
 	var blocks []string
-	maxBlockWidth := 0
+	contentWidth := totalWidth - 6
 
 	for _, gName := range gNames {
 		g := inv.Groups[gName]
@@ -498,16 +430,18 @@ func RenderGroupDashboard(inv *models.Inventory) string {
 				BoldStyle.Foreground(Cyan).Render(cName)))
 		}
 
-		blockStr := blockSb.String()
-		blocks = append(blocks, blockStr)
-		w := lipgloss.Width(blockStr)
+		blocks = append(blocks, blockSb.String())
+	}
+
+	// We still use a grid for the Group Hierarchy view because it's usually small
+	maxBlockWidth := 0
+	for _, b := range blocks {
+		w := lipgloss.Width(b)
 		if w > maxBlockWidth {
 			maxBlockWidth = w
 		}
 	}
 
-	// Arrange blocks into rows
-	contentWidth := totalWidth - 6
 	numCols := contentWidth / (maxBlockWidth + 4)
 	if numCols < 1 {
 		numCols = 1
@@ -519,7 +453,6 @@ func RenderGroupDashboard(inv *models.Inventory) string {
 		if end > len(blocks) {
 			end = len(blocks)
 		}
-
 		rowBlocks := blocks[i:end]
 		for j := range rowBlocks {
 			if j < len(rowBlocks)-1 {
