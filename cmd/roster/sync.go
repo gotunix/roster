@@ -42,6 +42,7 @@ type NetBoxResponse struct {
 
 type NetBoxObject struct {
 	Name      string `json:"name"`
+	Description string `json:"description"`
 	PrimaryIP *struct {
 		Address string `json:"address"`
 	} `json:"primary_ip"`
@@ -150,6 +151,13 @@ var syncNetboxCmd = &cobra.Command{
 						ip := strings.Split(obj.PrimaryIP.Address, "/")[0] // Strip CIDR
 						if err := store.SetHostVar(dir, name, "ansible_host", ip); err != nil {
 							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting ansible_host for %s: %v", name, err))
+						}
+					}
+
+					// Map description
+					if obj.Description != "" {
+						if err := store.SetHostVar(dir, name, "description", obj.Description); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Setting description for %s: %v", name, err))
 						}
 					}
 
