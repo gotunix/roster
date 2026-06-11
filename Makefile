@@ -4,7 +4,7 @@ BINDIR = $(PREFIX)/bin
 .PHONY: build test clean install uninstall
 
 build:
-	go build -o roster ./cmd/roster/
+	go build -buildvcs=false -o roster ./cmd/roster/
 
 test:
 	go test -v ./...
