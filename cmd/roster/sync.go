@@ -41,10 +41,10 @@ type NetBoxResponse struct {
 }
 
 type NetBoxObject struct {
-	Name          string                 `json:"name"`
-	Description   string                 `json:"description"`
-	ConfigContext map[string]interface{} `json:"config_context"`
-	PrimaryIP     *struct {
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description"`
+	LocalContext map[string]interface{} `json:"local_context_data"`
+	PrimaryIP    *struct {
 		Address string `json:"address"`
 	} `json:"primary_ip"`
 	Tags []struct {
@@ -145,8 +145,9 @@ var syncNetboxCmd = &cobra.Command{
 			}
 			apiURL.Path = strings.TrimSuffix(apiURL.Path, "/") + endpoint
 
-			// Apply filters
+			// Apply filters and exclude the merged config_context to get local_context_data instead
 			q := apiURL.Query()
+			q.Add("exclude", "config_context")
 			if syncFilter != "" {
 				filters := strings.Split(syncFilter, ",")
 				for _, f := range filters {
@@ -216,10 +217,10 @@ var syncNetboxCmd = &cobra.Command{
 						}
 					}
 
-					// Map config context
-					if len(obj.ConfigContext) > 0 {
-						if err := store.MergeHostVars(dir, name, obj.ConfigContext); err != nil {
-							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging config_context for %s: %v", name, err))
+					// Map local config context
+					if len(obj.LocalContext) > 0 {
+						if err := store.MergeHostVars(dir, name, obj.LocalContext); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging local_context for %s: %v", name, err))
 						}
 					}
 
