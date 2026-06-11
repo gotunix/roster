@@ -499,17 +499,14 @@ func RemoveGroup(baseDir, groupName string) error {
 	return nil
 }
 
-// MergeHostVars merges a map of variables into a host's existing host_vars file
+// MergeHostVars merges a map of variables into a host's existing host_vars file (recursive)
 func MergeHostVars(baseDir, hostname string, newVars map[string]interface{}) error {
 	existing, _ := GetHostVars(baseDir, hostname)
 	if existing == nil {
 		existing = make(map[string]interface{})
 	}
 
-	for k, v := range newVars {
-		existing[k] = v
-	}
-
+	DeepMerge(existing, newVars)
 	return SaveHostVars(baseDir, hostname, existing)
 }
 
@@ -520,18 +517,28 @@ func SaveHostVars(baseDir, hostname string, vars map[string]interface{}) error {
 	return os.WriteFile(path, bytes, 0644)
 }
 
-// MergeGroupVars merges a map of variables into a group's existing group_vars file
+// MergeGroupVars merges a map of variables into a group's existing group_vars file (recursive)
 func MergeGroupVars(baseDir, groupname string, newVars map[string]interface{}) error {
 	existing, _ := GetGroupVars(baseDir, groupname)
 	if existing == nil {
 		existing = make(map[string]interface{})
 	}
 
-	for k, v := range newVars {
-		existing[k] = v
-	}
-
+	DeepMerge(existing, newVars)
 	return SaveGroupVars(baseDir, groupname, existing)
+}
+
+// DeepMerge recursively merges src into dst
+func DeepMerge(dst, src map[string]interface{}) {
+	for k, v := range src {
+		if srcMap, ok := v.(map[string]interface{}); ok {
+			if dstMap, ok := dst[k].(map[string]interface{}); ok {
+				DeepMerge(dstMap, srcMap)
+				continue
+			}
+		}
+		dst[k] = v
+	}
 }
 
 // SaveGroupVars overwrites a group's variables in group_vars/<groupname>.yml

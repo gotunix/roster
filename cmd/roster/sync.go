@@ -51,6 +51,13 @@ type NetBoxObject struct {
 		Slug string `json:"slug"`
 		Name string `json:"name"`
 	} `json:"tags"`
+	Status     interface{} `json:"status"`
+	Site       interface{} `json:"site"`
+	DeviceRole interface{} `json:"device_role"`
+	Role       interface{} `json:"role"`
+	Platform   interface{} `json:"platform"`
+	DeviceType interface{} `json:"device_type"`
+	Cluster    interface{} `json:"cluster"`
 }
 
 var syncCmd = &cobra.Command{
@@ -77,6 +84,38 @@ var syncNetboxCmd = &cobra.Command{
 			return
 		}
 		defer store.UnlockInventory()
+
+		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("🔄 Syncing from NetBox: "+baseURL))
+
+		extractSlugs := func(items []interface{}) []string {
+			var slugs []string
+			for _, item := range items {
+				switch v := item.(type) {
+				case string:
+					slugs = append(slugs, v)
+				case map[string]interface{}:
+					if slug, ok := v["slug"].(string); ok {
+						slugs = append(slugs, slug)
+					}
+				}
+			}
+			return slugs
+		}
+
+		extractVal := func(item interface{}) interface{} {
+			if item == nil {
+				return nil
+			}
+			if m, ok := item.(map[string]interface{}); ok {
+				if slug, ok := m["slug"].(string); ok {
+					return slug
+				}
+				if val, ok := m["value"].(string); ok {
+					return val
+				}
+			}
+			return item
+		}
 
 		// 1. Sync Config Contexts (Groups)
 		fmt.Fprintln(os.Stderr, ui.BoldStyle.Foreground(ui.Cyan).Render("📦 Syncing Group Config Contexts..."))
@@ -114,21 +153,6 @@ var syncNetboxCmd = &cobra.Command{
 				break
 			}
 			resp.Body.Close()
-
-			extractSlugs := func(items []interface{}) []string {
-				var slugs []string
-				for _, item := range items {
-					switch v := item.(type) {
-					case string:
-						slugs = append(slugs, v)
-					case map[string]interface{}:
-						if slug, ok := v["slug"].(string); ok {
-							slugs = append(slugs, slug)
-						}
-					}
-				}
-				return slugs
-			}
 
 			for _, ctx := range ctxResp.Results {
 				// Map this context data to each assigned group type
@@ -253,6 +277,39 @@ var syncNetboxCmd = &cobra.Command{
 					if len(obj.LocalContext) > 0 {
 						if err := store.MergeHostVars(dir, name, obj.LocalContext); err != nil {
 							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging local_context for %s: %v", name, err))
+						}
+					}
+
+					// Map NetBox Metadata
+					netboxVars := make(map[string]interface{})
+					if v := extractVal(obj.Status); v != nil {
+						netboxVars["status"] = v
+					}
+					if v := extractVal(obj.Site); v != nil {
+						netboxVars["site"] = v
+					}
+					if v := extractVal(obj.Platform); v != nil {
+						netboxVars["platform"] = v
+					}
+					if v := extractVal(obj.DeviceType); v != nil {
+						netboxVars["device_type"] = v
+					}
+					if v := extractVal(obj.Cluster); v != nil {
+						netboxVars["cluster"] = v
+					}
+
+					// Role (DeviceRole for Devices, Role for VMs)
+					role := extractVal(obj.DeviceRole)
+					if role == nil {
+						role = extractVal(obj.Role)
+					}
+					if role != nil {
+						netboxVars["role"] = role
+					}
+
+					if len(netboxVars) > 0 {
+						if err := store.MergeHostVars(dir, name, map[string]interface{}{"netbox": netboxVars}); err != nil {
+							fmt.Fprintln(os.Stderr, ui.ErrorMsg("Merging netbox metadata for %s: %v", name, err))
 						}
 					}
 
