@@ -101,11 +101,11 @@ var syncNetboxCmd = &cobra.Command{
 				Results []struct {
 					Name         string                 `json:"name"`
 					Data         map[string]interface{} `json:"data"`
-					Roles        []struct{ Slug string } `json:"roles"`
-					DeviceGroups []struct{ Slug string } `json:"device_groups"`
-					Tags         []struct{ Slug string } `json:"tags"`
-					Platforms    []struct{ Slug string } `json:"platforms"`
-					Sites        []struct{ Slug string } `json:"sites"`
+					Roles        []string               `json:"roles"`
+					DeviceGroups []string               `json:"device_groups"`
+					Tags         []string               `json:"tags"`
+					Platforms    []string               `json:"platforms"`
+					Sites        []string               `json:"sites"`
 				} `json:"results"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&ctxResp); err != nil {
@@ -118,11 +118,11 @@ var syncNetboxCmd = &cobra.Command{
 			for _, ctx := range ctxResp.Results {
 				// Map this context data to each assigned group type
 				targetGroups := make(map[string]bool)
-				for _, r := range ctx.Roles { if r.Slug != "" { targetGroups[r.Slug] = true } }
-				for _, dg := range ctx.DeviceGroups { if dg.Slug != "" { targetGroups[dg.Slug] = true } }
-				for _, t := range ctx.Tags { if t.Slug != "" { targetGroups[t.Slug] = true } }
-				for _, p := range ctx.Platforms { if p.Slug != "" { targetGroups[p.Slug] = true } }
-				for _, s := range ctx.Sites { if s.Slug != "" { targetGroups[s.Slug] = true } }
+				for _, r := range ctx.Roles { if r != "" { targetGroups[r] = true } }
+				for _, dg := range ctx.DeviceGroups { if dg != "" { targetGroups[dg] = true } }
+				for _, t := range ctx.Tags { if t != "" { targetGroups[t] = true } }
+				for _, p := range ctx.Platforms { if p != "" { targetGroups[p] = true } }
+				for _, s := range ctx.Sites { if s != "" { targetGroups[s] = true } }
 
 				if len(targetGroups) == 0 {
 					continue
