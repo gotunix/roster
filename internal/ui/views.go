@@ -185,23 +185,26 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 
 	sort.Strings(hosts)
 
-	// Calculate max width needed for a single host entry
-	maxHostWidth := 0
-	entries := make([]string, len(hosts))
-	for i, hName := range hosts {
-		h := inv.Hosts[hName]
+	var hostBlocks []string
+	maxBlockWidth := 0
+	subtleStyle := lipgloss.NewStyle().Foreground(Subtle)
 
-		// Build Hostname + Description
+	for _, hName := range hosts {
+		h := inv.Hosts[hName]
+		var bSb strings.Builder
+
+		// 1. Hostname + Description
 		hostDisplay := BoldStyle.Foreground(Green).Render(hName)
-		rawLen := len(hName) + 2 // "• " + name
+		rawWidth := len(hName)
 		if h != nil && h.Vars != nil {
 			if desc, ok := h.Vars["description"].(string); ok && desc != "" {
 				hostDisplay = fmt.Sprintf("%s %s", hostDisplay, DescriptionStyle.Render("("+desc+")"))
-				rawLen += len(desc) + 3 // " (desc)"
+				rawWidth += len(desc) + 3
 			}
 		}
+		bSb.WriteString(hostDisplay + "\n")
 
-		// Build Groups list
+		// 2. Groups tree
 		var groups []string
 		for gName, g := range inv.Groups {
 			for _, member := range g.Hosts {
@@ -212,26 +215,32 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 			}
 		}
 		sort.Strings(groups)
-		gStr := "[" + strings.Join(groups, ", ") + "]"
-		groupDisplay := lipgloss.NewStyle().Foreground(Subtle).Render(gStr)
-		rawLen += len(gStr) + 2 // "  " + groups
+		for i, gName := range groups {
+			branch := " ├─ "
+			if i == len(groups)-1 {
+				branch = " └─ "
+			}
+			bSb.WriteString(subtleStyle.Render(branch) + subtleStyle.Render(gName) + "\n")
+			if len(gName)+4 > rawWidth {
+				rawWidth = len(gName) + 4
+			}
+		}
 
-		entries[i] = fmt.Sprintf("• %s  %s", hostDisplay, groupDisplay)
-		if rawLen > maxHostWidth {
-			maxHostWidth = rawLen
+		blockStr := bSb.String()
+		hostBlocks = append(hostBlocks, blockStr)
+		if rawWidth > maxBlockWidth {
+			maxBlockWidth = rawWidth
 		}
 	}
 
-	// Calculate how many columns we can fit
 	totalWidth := GetTerminalWidth()
-	contentWidth := totalWidth - 6 // Padding and borders
-	numCols := contentWidth / (maxHostWidth + 4)
+	contentWidth := totalWidth - 6
+	numCols := contentWidth / (maxBlockWidth + 4)
 	if numCols < 1 {
 		numCols = 1
 	}
 
 	var listSb strings.Builder
-
 	// Add summary count
 	statsStyle := lipgloss.NewStyle().
 		Foreground(Subtle).
@@ -244,25 +253,18 @@ func RenderHostList(inv *models.Inventory, groupFilter string) string {
 	}
 	listSb.WriteString(statsStyle.Render(countMsg) + "\n\n")
 
-	for i := 0; i < len(entries); i += numCols {
-		for j := 0; j < numCols; j++ {
-			idx := i + j
-			if idx < len(entries) {
-				// Pad entry to align columns
-				item := entries[idx]
-				if j < numCols-1 {
-					// We need to pad the rendered string. Lipgloss.Width gives us the visual width.
-					currentLen := lipgloss.Width(item)
-					padding := maxHostWidth + 4 - currentLen
-					if padding < 0 {
-						padding = 0
-					}
-					item += strings.Repeat(" ", padding)
-				}
-				listSb.WriteString(item)
-			}
+	for i := 0; i < len(hostBlocks); i += numCols {
+		end := i + numCols
+		if end > len(hostBlocks) {
+			end = len(hostBlocks)
 		}
-		listSb.WriteString("\n")
+
+		rowBlocks := make([]string, end-i)
+		for j := range rowBlocks {
+			// Pad each block to the max width to ensure alignment
+			rowBlocks[j] = lipgloss.NewStyle().Width(maxBlockWidth + 4).Render(hostBlocks[i+j])
+		}
+		listSb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, rowBlocks...) + "\n")
 	}
 
 	var sb strings.Builder
