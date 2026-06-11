@@ -101,11 +101,11 @@ var syncNetboxCmd = &cobra.Command{
 				Results []struct {
 					Name         string                 `json:"name"`
 					Data         map[string]interface{} `json:"data"`
-					Roles        []string               `json:"roles"`
-					DeviceGroups []string               `json:"device_groups"`
-					Tags         []string               `json:"tags"`
-					Platforms    []string               `json:"platforms"`
-					Sites        []string               `json:"sites"`
+					Roles        []interface{}          `json:"roles"`
+					DeviceGroups []interface{}          `json:"device_groups"`
+					Tags         []interface{}          `json:"tags"`
+					Platforms    []interface{}          `json:"platforms"`
+					Sites        []interface{}          `json:"sites"`
 				} `json:"results"`
 			}
 			if err := json.NewDecoder(resp.Body).Decode(&ctxResp); err != nil {
@@ -115,14 +115,29 @@ var syncNetboxCmd = &cobra.Command{
 			}
 			resp.Body.Close()
 
+			extractSlugs := func(items []interface{}) []string {
+				var slugs []string
+				for _, item := range items {
+					switch v := item.(type) {
+					case string:
+						slugs = append(slugs, v)
+					case map[string]interface{}:
+						if slug, ok := v["slug"].(string); ok {
+							slugs = append(slugs, slug)
+						}
+					}
+				}
+				return slugs
+			}
+
 			for _, ctx := range ctxResp.Results {
 				// Map this context data to each assigned group type
 				targetGroups := make(map[string]bool)
-				for _, r := range ctx.Roles { if r != "" { targetGroups[r] = true } }
-				for _, dg := range ctx.DeviceGroups { if dg != "" { targetGroups[dg] = true } }
-				for _, t := range ctx.Tags { if t != "" { targetGroups[t] = true } }
-				for _, p := range ctx.Platforms { if p != "" { targetGroups[p] = true } }
-				for _, s := range ctx.Sites { if s != "" { targetGroups[s] = true } }
+				for _, s := range extractSlugs(ctx.Roles) { targetGroups[s] = true }
+				for _, s := range extractSlugs(ctx.DeviceGroups) { targetGroups[s] = true }
+				for _, s := range extractSlugs(ctx.Tags) { targetGroups[s] = true }
+				for _, s := range extractSlugs(ctx.Platforms) { targetGroups[s] = true }
+				for _, s := range extractSlugs(ctx.Sites) { targetGroups[s] = true }
 
 				if len(targetGroups) == 0 {
 					continue
