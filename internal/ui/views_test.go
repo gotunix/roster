@@ -38,7 +38,7 @@ import (
 func TestRenderHostList(t *testing.T) {
 	// 1. Empty inventory
 	inv := &models.Inventory{Hosts: make(map[string]*models.Host)}
-	out := RenderHostList(inv, "")
+	out := RenderHostList(inv, "", false)
 	if !strings.Contains(out, "No hosts found") {
 		t.Errorf("expected empty message, got %q", out)
 	}
@@ -46,7 +46,7 @@ func TestRenderHostList(t *testing.T) {
 	// 2. Populated inventory
 	inv.Hosts["srv1"] = &models.Host{Name: "srv1"}
 	inv.Hosts["srv2"] = &models.Host{Name: "srv2"}
-	out = RenderHostList(inv, "")
+	out = RenderHostList(inv, "", false)
 
 	if !strings.Contains(out, "HOSTS") {
 		t.Error("missing HOSTS header")

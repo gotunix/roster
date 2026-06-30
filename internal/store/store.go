@@ -206,7 +206,7 @@ func GetHostVarsPath(baseDir, hostname string) string {
 			return p
 		}
 	}
-	return filepath.Join(baseDir, "host_vars", hostname+".yml")
+	return filepath.Join(baseDir, "host_vars", hostname+".yaml")
 }
 
 // GetGroupVarsPath returns the existing path to a group's vars file, or a default one
@@ -221,15 +221,15 @@ func GetGroupVarsPath(baseDir, groupname string) string {
 			return p
 		}
 	}
-	return filepath.Join(baseDir, "group_vars", groupname+".yml")
+	return filepath.Join(baseDir, "group_vars", groupname+".yaml")
 }
 
-// GetHostVars reads variables for a specific host from host_vars/<hostname>.yml
+// GetHostVars reads variables for a specific host from host_vars/<hostname>.yaml
 func GetHostVars(baseDir, hostname string) (map[string]interface{}, error) {
 	paths := []string{
 		filepath.Join(baseDir, "host_vars", hostname+".yaml"),
 		filepath.Join(baseDir, "host_vars", hostname+".yml"),
-		filepath.Join(baseDir, "host_vars", hostname), // Ansible also supports dir with main.yml, but we'll stick to files for now
+		filepath.Join(baseDir, "host_vars", hostname), // Ansible also supports dir with main.yaml, but we'll stick to files for now
 	}
 
 	for _, p := range paths {
@@ -243,7 +243,7 @@ func GetHostVars(baseDir, hostname string) (map[string]interface{}, error) {
 	return make(map[string]interface{}), nil
 }
 
-// GetGroupVars reads variables for a specific group from group_vars/<groupname>.yml
+// GetGroupVars reads variables for a specific group from group_vars/<groupname>.yaml
 func GetGroupVars(baseDir, groupname string) (map[string]interface{}, error) {
 	paths := []string{
 		filepath.Join(baseDir, "group_vars", groupname+".yaml"),
@@ -375,7 +375,7 @@ func AssignGroupToGroup(baseDir, childName, parentName string) error {
 	return SaveGroup(baseDir, parentName, parent)
 }
 
-// SetHostVar sets a variable for a host in host_vars/<hostname>.yml
+// SetHostVar sets a variable for a host in host_vars/<hostname>.yaml
 func SetHostVar(baseDir, hostname, key, value string) error {
 	inv, err := LoadInventory(baseDir)
 	if err != nil {
@@ -385,7 +385,7 @@ func SetHostVar(baseDir, hostname, key, value string) error {
 		return fmt.Errorf("host %q not found in inventory", hostname)
 	}
 
-	path := filepath.Join(baseDir, "host_vars", hostname+".yml")
+	path := GetHostVarsPath(baseDir, hostname)
 	vars, _ := GetHostVars(baseDir, hostname)
 	if vars == nil {
 		vars = make(map[string]interface{})
@@ -396,7 +396,7 @@ func SetHostVar(baseDir, hostname, key, value string) error {
 	return os.WriteFile(path, bytes, 0644)
 }
 
-// SetGroupVar sets a variable for a group in group_vars/<groupname>.yml
+// SetGroupVar sets a variable for a group in group_vars/<groupname>.yaml
 func SetGroupVar(baseDir, groupname, key, value string) error {
 	inv, err := LoadInventory(baseDir)
 	if err != nil {
@@ -406,7 +406,7 @@ func SetGroupVar(baseDir, groupname, key, value string) error {
 		return fmt.Errorf("group %q not found in inventory", groupname)
 	}
 
-	path := filepath.Join(baseDir, "group_vars", groupname+".yml")
+	path := GetGroupVarsPath(baseDir, groupname)
 	vars, _ := GetGroupVars(baseDir, groupname)
 	if vars == nil {
 		vars = make(map[string]interface{})
@@ -487,9 +487,9 @@ func RemoveGroup(baseDir, groupName string) error {
 		return fmt.Errorf("group %q not found in inventory", groupName)
 	}
 
-	path := filepath.Join(baseDir, groupName+".yml")
+	path := filepath.Join(baseDir, groupName+".yaml")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		path = filepath.Join(baseDir, groupName+".yaml")
+		path = filepath.Join(baseDir, groupName+".yml")
 	}
 	os.Remove(path)
 	os.Remove(filepath.Join(baseDir, "group_vars", groupName+".yml"))
@@ -510,9 +510,9 @@ func MergeHostVars(baseDir, hostname string, newVars map[string]interface{}) err
 	return SaveHostVars(baseDir, hostname, existing)
 }
 
-// SaveHostVars overwrites a host's variables in host_vars/<hostname>.yml
+// SaveHostVars overwrites a host's variables in host_vars/<hostname>.yaml
 func SaveHostVars(baseDir, hostname string, vars map[string]interface{}) error {
-	path := filepath.Join(baseDir, "host_vars", hostname+".yml")
+	path := GetHostVarsPath(baseDir, hostname)
 	bytes, _ := yaml.Marshal(vars)
 	return os.WriteFile(path, bytes, 0644)
 }
@@ -541,9 +541,9 @@ func DeepMerge(dst, src map[string]interface{}) {
 	}
 }
 
-// SaveGroupVars overwrites a group's variables in group_vars/<groupname>.yml
+// SaveGroupVars overwrites a group's variables in group_vars/<groupname>.yaml
 func SaveGroupVars(baseDir, groupname string, vars map[string]interface{}) error {
-	path := filepath.Join(baseDir, "group_vars", groupname+".yml")
+	path := GetGroupVarsPath(baseDir, groupname)
 	bytes, _ := yaml.Marshal(vars)
 	return os.WriteFile(path, bytes, 0644)
 }
