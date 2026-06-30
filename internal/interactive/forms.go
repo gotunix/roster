@@ -208,3 +208,32 @@ func EditGroupInteractive(baseDir, groupname string) error {
 	// Save
 	return store.SaveGroupVars(baseDir, groupname, newVars)
 }
+
+// PromptForIP prompts the user for an IP address when DNS lookup fails
+func PromptForIP(hostname string) (string, error) {
+	var ip string
+	theme := huh.ThemeCharm()
+	theme.Focused.Base = theme.Focused.Base.BorderForeground(ui.Magenta)
+	theme.Group.Base = theme.Group.Base.Border(lipgloss.NormalBorder()).BorderForeground(ui.Gray)
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(fmt.Sprintf("DNS lookup failed for %q. Enter IP address:", hostname)).
+				Value(&ip).
+				Validate(func(str string) error {
+					trimmed := strings.TrimSpace(str)
+					if trimmed == "" {
+						return fmt.Errorf("IP address cannot be empty")
+					}
+					return nil
+				}),
+		),
+	).WithTheme(theme)
+
+	if err := form.Run(); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(ip), nil
+}
+

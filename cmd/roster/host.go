@@ -30,6 +30,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -115,8 +116,34 @@ var hostAddCmd = &cobra.Command{
 
 			if err := store.AddHostToMain(dir, hostname); err != nil {
 				fmt.Println(ui.ErrorMsg("Adding host %s: %v", hostname, err))
+				continue
+			}
+
+			fmt.Println(ui.SuccessMsg("Host %s added successfully", hostname))
+
+			// Attempt DNS lookup
+			var ip string
+			ips, dnsErr := net.LookupIP(hostname)
+			if dnsErr == nil && len(ips) > 0 {
+				// Use the first resolved IP
+				ip = ips[0].String()
+				fmt.Printf("DNS resolved %s to %s\n", hostname, ip)
 			} else {
-				fmt.Println(ui.SuccessMsg("Host %s added successfully", hostname))
+				// DNS lookup failed or returned no IPs, prompt the user
+				var promptErr error
+				ip, promptErr = interactive.PromptForIP(hostname)
+				if promptErr != nil {
+					fmt.Println(ui.ErrorMsg("Skipping setting IP address for %s: %v", hostname, promptErr))
+					continue
+				}
+			}
+
+			if ip != "" {
+				if err := store.SetHostVar(dir, hostname, "ansible_host", ip); err != nil {
+					fmt.Println(ui.ErrorMsg("Setting ansible_host variable for %s: %v", hostname, err))
+				} else {
+					fmt.Println(ui.SuccessMsg("Set ansible_host = %s for %s", ip, hostname))
+				}
 			}
 		}
 	},
