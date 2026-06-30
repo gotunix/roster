@@ -1,0 +1,4 @@
+parent_gp:
+    children:
+        child_gp: {}
+    hosts: {}
