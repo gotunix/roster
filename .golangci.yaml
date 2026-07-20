@@ -1,0 +1,70 @@
+# golangci-lint configuration file (v2)
+# Reference: https://golangci-lint.run/docs/configuration/configuration/
+
+version: "2"
+
+run:
+  # The default Go version to target
+  go: "1.26"
+  # Timeout for analysis, e.g. 5m, 10m
+  timeout: 5m
+  # Allow multiple runners to execute in parallel
+  allow-parallel-runners: true
+
+linters:
+  default: none
+  enable:
+    - errcheck      # Checks for unhandled errors
+    - goconst       # Finds repeated strings that could be constants
+    - gocritic      # Provides diagnostics and style suggestions
+    - gosec         # Inspects source code for security problems
+    - govet         # Reports suspicious constructs (e.g. Printf calls)
+    - ineffassign   # Detects ineffectual assignments
+    - revive        # Fast, configurable, extensible linter for Go (successor to golint)
+    - staticcheck   # Applies a ton of static analysis checks
+    - unused        # Checks Go code for unused constants, variables, functions and types
+    - misspell      # Finds commonly misspelled English words in comments
+
+  settings:
+    govet:
+      # Disable analyzer by name
+      disable:
+        - fieldalignment # We do not enforce field alignment optimization
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+    revive:
+      # Configure revive rules if necessary; defaults are generally fine, but we can override.
+      # By default revive applies reasonable style guidelines.
+      severity: warning
+    gosec:
+      excludes:
+        - G204
+        - G301
+        - G304
+        - G306
+        - G702
+
+  exclusions:
+    rules:
+      # Exclude revive package-comments and exported comments since it's a CLI tool
+      - linters:
+          - revive
+        text: "should have a package comment"
+      - linters:
+          - revive
+        text: "should have comment or be unexported"
+      - linters:
+          - revive
+        text: "comment on exported"
+      # Exclude goconst warnings on common strings
+      - linters:
+          - goconst
+        text: "make it a constant"
+
+formatters:
+  enable:
+    - goimports
